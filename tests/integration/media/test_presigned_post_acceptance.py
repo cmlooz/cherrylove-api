@@ -1,9 +1,9 @@
-"""DEC-037 spike: presigned POST acceptance test for candidate local S3 servers.
+"""Presigned POST acceptance test against the local S3 server (DEC-037 spike, DEC-047: Versity).
 
 Every case below is a rule from ADR-007 §2 (storage itself enforces size and type)
-and §7 (private bucket, CORS for one origin, short signed GET). A candidate is
-eligible for DEC-047 only if it passes every case. In F4.1 these cases become the
-integration tests of the S3 adapter against the chosen server.
+and §7 (private bucket, CORS for one origin, short signed GET). The F0.1 spike ran it
+against four candidates; since F0.4 it runs against the server chosen in DEC-047.
+In F4.1 these cases become the integration tests of the S3 adapter.
 """
 
 from __future__ import annotations
@@ -16,37 +16,16 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-import boto3
 import pytest
-from botocore.client import Config
 
-pytestmark = [pytest.mark.integration, pytest.mark.spike]
+from tests.integration.stack import s3_client, s3_endpoint
+
+pytestmark = pytest.mark.integration
 
 WEB_ORIGIN = "http://localhost:5173"
 OTHER_ORIGIN = "http://evil.example"
 MAX_BYTES = 1024
 CONTENT_TYPE = "image/jpeg"
-
-
-@dataclass(frozen=True)
-class Candidate:
-    name: str
-    endpoint: str
-    access_key: str
-    secret_key: str
-
-
-CANDIDATES = [
-    Candidate("rustfs", "http://127.0.0.1:9100", "spikeaccesskey", "spikesecretkey"),
-    Candidate("seaweedfs", "http://127.0.0.1:9200", "spikeaccesskey", "spikesecretkey"),
-    Candidate("versitygw", "http://127.0.0.1:9300", "spikeaccesskey", "spikesecretkey"),
-    Candidate(
-        "garage",
-        "http://127.0.0.1:9400",
-        "GK000000000000000000000000",
-        "0000000000000000000000000000000000000000000000000000000000000000",
-    ),
-]
 
 
 @dataclass(frozen=True)
@@ -96,7 +75,7 @@ def _multipart(fields: dict[str, str], content: bytes, content_type: str) -> tup
 
 @dataclass
 class Storage:
-    candidate: Candidate
+    endpoint: str
     client: Any
     bucket: str
 
@@ -128,20 +107,12 @@ class Storage:
         return any(item["Key"] == key for item in listed.get("Contents", []))
 
 
-@pytest.fixture(params=CANDIDATES, ids=[c.name for c in CANDIDATES])
-def storage(request: pytest.FixtureRequest) -> Iterator[Storage]:
-    candidate: Candidate = request.param
-    client = boto3.client(
-        "s3",
-        endpoint_url=candidate.endpoint,
-        aws_access_key_id=candidate.access_key,
-        aws_secret_access_key=candidate.secret_key,
-        region_name="us-east-1",
-        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-    )
-    bucket = f"spike-{uuid.uuid4().hex[:12]}"
+@pytest.fixture
+def storage() -> Iterator[Storage]:
+    client = s3_client()
+    bucket = f"acceptance-{uuid.uuid4().hex[:12]}"
     client.create_bucket(Bucket=bucket)
-    yield Storage(candidate, client, bucket)
+    yield Storage(s3_endpoint(), client, bucket)
     for item in client.list_objects_v2(Bucket=bucket).get("Contents", []):
         client.delete_object(Bucket=bucket, Key=item["Key"])
     client.delete_bucket(Bucket=bucket)
@@ -219,7 +190,7 @@ def test_bucket_cors_allows_only_the_web_origin(storage: Storage) -> None:
             ]
         },
     )
-    url = f"{storage.candidate.endpoint}/{storage.bucket}"
+    url = f"{storage.endpoint}/{storage.bucket}"
 
     def preflight(origin: str) -> Response:
         return _request(
@@ -238,6 +209,6 @@ def test_bucket_cors_allows_only_the_web_origin(storage: Storage) -> None:
 def test_bucket_is_private_by_default(storage: Storage) -> None:
     key = _key()
     storage.client.put_object(Bucket=storage.bucket, Key=key, Body=b"secret")
-    base = f"{storage.candidate.endpoint}/{storage.bucket}"
+    base = f"{storage.endpoint}/{storage.bucket}"
     assert _request("GET", f"{base}/{key}").status in (401, 403)
     assert _request("GET", f"{base}?list-type=2").status in (401, 403)

@@ -1,0 +1,65 @@
+# Local stack (REQ-N-OPS-01, DEC-022): PostgreSQL, Redis, Mailpit, Versity S3 Gateway (DEC-047).
+# Throwaway local credentials only; real values live outside git (DEC-039). Images pinned in pins.toml.
+#
+#   docker compose up -d --wait
+#   docker compose down        # add -v to wipe data
+
+name: cherrylove
+
+services:
+  postgres:
+    image: postgres:18.7-alpine
+    environment:
+      POSTGRES_DB: cherrylove
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 2s
+      retries: 30
+
+  redis:
+    image: redis:8.8.4-alpine
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.33.1
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+
+  # With the POSIX backend a bucket is a directory: create it before the gateway starts.
+  storage-init:
+    image: versity/versitygw:v1.11.0
+    entrypoint: ["mkdir", "-p", "/data/cherrylove-media"]
+    volumes:
+      - storage-data:/data
+
+  storage:
+    image: versity/versitygw:v1.11.0
+    depends_on:
+      storage-init:
+        condition: service_completed_successfully
+    environment:
+      ROOT_ACCESS_KEY: localaccesskey
+      ROOT_SECRET_KEY: localsecretkey
+      VGW_BACKEND: posix
+      VGW_BACKEND_ARG: /data
+      VGW_ARGS: --port :7070 --region us-east-1
+    ports:
+      - "127.0.0.1:7070:7070"
+    volumes:
+      - storage-data:/data
+
+volumes:
+  postgres-data:
+  storage-data:

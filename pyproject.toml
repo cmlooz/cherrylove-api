@@ -27,5 +27,4 @@ DJANGO_SETTINGS_MODULE = "config.settings.test"
 markers = [
   "req(id): requirement the test proves (ADR-014 §6, REQ-N-QA-06)",
   "integration: needs real infrastructure (Docker)",
-  "spike: DEC-037 local S3 server spike, needs spike/compose.s3.yaml",
 ]
