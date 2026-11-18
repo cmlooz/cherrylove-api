@@ -9,6 +9,7 @@ import json
 import os
 import smtplib
 import socket
+import urllib.parse
 import urllib.request
 import uuid
 from email.message import EmailMessage
@@ -80,7 +81,7 @@ def test_sent_mail_appears_in_mailpit() -> None:
     with smtplib.SMTP(*SMTP, timeout=5) as smtp:
         smtp.send_message(message)
 
-    query = urllib.request.quote(f'subject:"{subject}"')
+    query = urllib.parse.quote(f'subject:"{subject}"')
     with urllib.request.urlopen(f"{MAILPIT_API}/api/v1/search?query={query}", timeout=5) as response:
         found = json.load(response)
     assert found["messages_count"] == 1

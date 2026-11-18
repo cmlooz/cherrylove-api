@@ -64,7 +64,7 @@ USE_I18N = True
 USE_TZ = True
 
 # DRF without django.contrib.auth until F2.1: no session auth, no AnonymousUser model import.
-REST_FRAMEWORK = {
+REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_AUTHENTICATION_CLASSES": [],
     "DEFAULT_PERMISSION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,
@@ -72,7 +72,7 @@ REST_FRAMEWORK = {
 }
 
 # Generated schema must match contract/openapi.v1.yaml (ADR-003 §2, DEC-048).
-SPECTACULAR_SETTINGS = {
+SPECTACULAR_SETTINGS: dict[str, object] = {
     "OAS_VERSION": "3.1.0",
     "TITLE": "CherryLove API",
     "VERSION": "1.0.0",
