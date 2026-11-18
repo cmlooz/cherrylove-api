@@ -11,7 +11,7 @@ from django.db import ProgrammingError, connections, transaction
 pytestmark = pytest.mark.integration
 
 
-def _scalar(alias: str, sql: str, params: tuple[object, ...] = ()) -> object:
+def _scalar(alias: str, sql: str, params: tuple[str, ...] = ()) -> object:
     with connections[alias].cursor() as cursor:
         cursor.execute(sql, params)
         row = cursor.fetchone()
@@ -38,7 +38,8 @@ def test_migrations_run_as_the_maintenance_role() -> None:
     owner = _scalar("maintenance", "SELECT tableowner FROM pg_tables WHERE tablename = 'django_migrations'")
     assert owner == "cherrylove_maintenance"
     applied = _scalar(
-        "default", "SELECT count(*) FROM django_migrations WHERE app = %s AND name = %s",
+        "default",
+        "SELECT count(*) FROM django_migrations WHERE app = %s AND name = %s",
         ("shared", "0001_app_role_default_privileges"),
     )
     assert applied == 1
@@ -69,6 +70,9 @@ def test_app_role_gets_dml_through_default_privileges(probe_table: str) -> None:
     ],
 )
 def test_app_role_is_denied_ddl(ddl: str) -> None:
-    with pytest.raises(ProgrammingError, match="permission denied|must be owner"):
-        with transaction.atomic(using="default"), connections["default"].cursor() as cursor:
-            cursor.execute(ddl)
+    with (
+        pytest.raises(ProgrammingError, match=r"permission denied|must be owner"),
+        transaction.atomic(using="default"),
+        connections["default"].cursor() as cursor,
+    ):
+        cursor.execute(ddl)

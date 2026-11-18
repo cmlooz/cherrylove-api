@@ -35,9 +35,7 @@ def _pins() -> dict[str, str]:
 def _direct_requirements() -> list[str]:
     project = _load("pyproject.toml")
     groups: dict[str, list[str]] = project.get("dependency-groups", {})
-    return list(project["project"]["dependencies"]) + [
-        spec for specs in groups.values() for spec in specs
-    ]
+    return list(project["project"]["dependencies"]) + [spec for specs in groups.values() for spec in specs]
 
 
 @pytest.mark.req("REQ-N-QA-05")

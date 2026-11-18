@@ -25,7 +25,8 @@ def test_conventional_subject_with_an_id_passes(subject: str) -> None:
 )
 def test_non_conventional_subject_fails(subject: str) -> None:
     problems = check_commit(Commit(SHA, f"{subject}\n\nRefs: DEC-023"))
-    assert problems and "Conventional Commit" in problems[0]
+    assert problems
+    assert "Conventional Commit" in problems[0]
 
 
 @pytest.mark.req("REQ-N-QA-06")

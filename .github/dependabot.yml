@@ -1,0 +1,19 @@
+# Weekly dependency updates, grouped per ecosystem (ADR-015 §3). Its PRs pass the same `ci`.
+# `uv` instead of `pip`: the pip ecosystem cannot update uv.lock. Every bump must still match pins.toml
+# (tests/architecture/test_toolchain.py), so Dependabot PRs also update the pin with Camilo's OK.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python:
+        patterns: ["*"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]

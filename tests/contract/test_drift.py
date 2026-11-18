@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _generated() -> dict[str, Any]:
-    schema: dict[str, Any] = SchemaGenerator().get_schema(request=None, public=True)
+    generator = SchemaGenerator()  # type: ignore[no-untyped-call]  # drf-spectacular ships no annotations here
+    schema: dict[str, Any] = generator.get_schema(request=None, public=True)  # type: ignore[no-untyped-call]
     return schema
 
 

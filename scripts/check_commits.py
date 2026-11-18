@@ -63,8 +63,8 @@ def commits_in(revision_range: str) -> list[Commit]:
         encoding="utf-8",
     ).stdout
     commits: list[Commit] = []
-    for chunk in output.split(SEPARATOR):
-        chunk = chunk.strip("\n")
+    for raw in output.split(SEPARATOR):
+        chunk = raw.strip("\n")
         if not chunk:
             continue
         sha, _, message = chunk.partition("\n")

@@ -94,6 +94,8 @@ def test_pending_list_may_only_shrink() -> None:
 
 @pytest.mark.req("REQ-N-ARC-03")
 def test_recursive_refs_terminate() -> None:
-    spec: dict[str, Any] = {"components": {"schemas": {"Node": {"properties": {"child": {"$ref": "#/components/schemas/Node"}}}}}}
+    spec: dict[str, Any] = {
+        "components": {"schemas": {"Node": {"properties": {"child": {"$ref": "#/components/schemas/Node"}}}}}
+    }
     result = normalize(copy.deepcopy(spec), {"$ref": "#/components/schemas/Node"})
     assert result == {"properties": {"child": {"$recursive": "Node"}}}

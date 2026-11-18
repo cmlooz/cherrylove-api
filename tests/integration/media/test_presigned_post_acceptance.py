@@ -35,18 +35,14 @@ class Response:
     body: bytes
 
 
-def _request(
-    method: str, url: str, body: bytes = b"", headers: dict[str, str] | None = None
-) -> Response:
+def _request(method: str, url: str, body: bytes = b"", headers: dict[str, str] | None = None) -> Response:
     """Plain HTTP call that never raises on 4xx (status is the assertion)."""
     parts = urlsplit(url)
     conn = http.client.HTTPConnection(parts.netloc, timeout=10)
     path = parts.path + (f"?{parts.query}" if parts.query else "")
     conn.request(method, path or "/", body=body, headers=headers or {})
     raw = conn.getresponse()
-    result = Response(
-        raw.status, {k.lower(): v for k, v in raw.getheaders()}, raw.read()
-    )
+    result = Response(raw.status, {k.lower(): v for k, v in raw.getheaders()}, raw.read())
     conn.close()
     return result
 
@@ -79,9 +75,7 @@ class Storage:
     client: Any
     bucket: str
 
-    def presigned_post(
-        self, key: str, *, expires_in: int = 900, content_type: str = CONTENT_TYPE
-    ) -> dict[str, Any]:
+    def presigned_post(self, key: str, *, expires_in: int = 900, content_type: str = CONTENT_TYPE) -> dict[str, Any]:
         post: dict[str, Any] = self.client.generate_presigned_post(
             Bucket=self.bucket,
             Key=key,
@@ -94,9 +88,7 @@ class Storage:
         )
         return post
 
-    def upload(
-        self, post: dict[str, Any], content: bytes, *, content_type: str = CONTENT_TYPE
-    ) -> Response:
+    def upload(self, post: dict[str, Any], content: bytes, *, content_type: str = CONTENT_TYPE) -> Response:
         fields = dict(post["fields"])
         fields["Content-Type"] = content_type
         body, header = _multipart(fields, content, content_type)
@@ -132,9 +124,7 @@ def test_valid_upload_is_accepted(storage: Storage) -> None:
 
 @pytest.mark.req("REQ-N-SEC-06")
 @pytest.mark.parametrize("size", [0, MAX_BYTES + 1], ids=["empty", "too_large"])
-def test_size_outside_content_length_range_is_rejected_by_storage(
-    storage: Storage, size: int
-) -> None:
+def test_size_outside_content_length_range_is_rejected_by_storage(storage: Storage, size: int) -> None:
     key = _key()
     response = storage.upload(storage.presigned_post(key), b"x" * size)
     assert 400 <= response.status < 500, response.status
@@ -144,9 +134,7 @@ def test_size_outside_content_length_range_is_rejected_by_storage(
 @pytest.mark.req("REQ-N-SEC-06")
 def test_wrong_content_type_is_rejected(storage: Storage) -> None:
     key = _key()
-    response = storage.upload(
-        storage.presigned_post(key), b"x" * 512, content_type="text/html"
-    )
+    response = storage.upload(storage.presigned_post(key), b"x" * 512, content_type="text/html")
     assert 400 <= response.status < 500, response.status
     assert not storage.exists(key)
 

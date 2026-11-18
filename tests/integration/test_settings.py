@@ -49,7 +49,9 @@ def test_production_settings_pass_check_deploy() -> None:
 
 
 @pytest.mark.req("REQ-N-ARC-01")
-@pytest.mark.parametrize("missing", ["DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DB_PASSWORD", "DB_MAINTENANCE_PASSWORD"])
+@pytest.mark.parametrize(
+    "missing", ["DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DB_PASSWORD", "DB_MAINTENANCE_PASSWORD"]
+)
 def test_production_settings_read_only_env_vars(missing: str) -> None:
     env = {k: v for k, v in DUMMY_PRODUCTION_ENV.items() if k != missing}
     result = _manage("check", env=env)

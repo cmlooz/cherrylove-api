@@ -14,10 +14,16 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+  "django-stubs==6.1.2",
+  "djangorestframework-stubs==3.18.2",
   "import-linter==2.16",
+  "mypy==2.4.1",
+  "pip-audit==2.10.1",
   "pytest==9.2.0",
+  "pytest-cov==7.1.0",
   "pytest-django==4.14.0",
   "pyyaml==6.0.3",
+  "ruff==0.17.5",
 ]
 
 [tool.uv]
@@ -32,3 +38,46 @@ markers = [
   "req(id): requirement the test proves (ADR-014 §6, REQ-N-QA-06)",
   "integration: needs real infrastructure (Docker)",
 ]
+
+[tool.ruff]
+line-length = 120
+target-version = "py314"
+src = ["src", ".", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "S", "N", "SIM", "RUF", "DJ", "PT", "TC", "C4", "PL"]
+ignore = [
+  "PLR2004",  # magic values are expected in test assertions and HTTP statuses
+  "TC001", "TC002", "TC003",  # runtime imports kept simple; `from __future__ import annotations` everywhere
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S310", "S603", "S608", "PLR0913"]
+# Django migration idioms: class-level lists; SQL built from module constants, never from input.
+"**/migrations/*" = ["RUF012", "S608"]
+"scripts/**" = ["S603", "S607"]
+"tests/integration/test_settings.py" = ["S105"]
+
+[tool.mypy]
+strict = true
+python_version = "3.14"
+mypy_path = ["src", "."]
+explicit_package_bases = true
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+exclude = ['^\.venv/']
+
+[[tool.mypy.overrides]]
+module = ["boto3", "boto3.*", "botocore", "botocore.*", "importlinter.*"]
+ignore_missing_imports = true
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+[tool.coverage.run]
+branch = true
+source = ["src", "config", "scripts"]
+omit = ["*/migrations/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true

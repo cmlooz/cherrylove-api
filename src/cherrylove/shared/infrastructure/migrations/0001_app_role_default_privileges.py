@@ -29,5 +29,5 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public
 
 class Migration(migrations.Migration):
     initial = True
-    dependencies: list[tuple[str, str]] = []
+    dependencies = []
     operations = [migrations.RunSQL(GRANT, REVOKE)]

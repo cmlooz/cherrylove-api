@@ -1,0 +1,216 @@
+# CI for every PR and for main (ADR-015 §1, REQ-N-QA-04). Cheap jobs first; integration runs only after them.
+# Third-party actions are pinned to a full commit SHA (ADR-015 §3). The required check on main is the `ci` job.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  UV_VERSION: "0.13.9" # pins.toml [tools]
+  OASDIFF_VERSION: "1.37.0" # pins.toml [tools]
+  UV_FROZEN: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync
+      - name: ruff
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - name: import-linter (ADR-001 §6)
+        run: uv run lint-imports --no-cache
+        env:
+          PYTHONPATH: src
+      - name: Conventional Commits and traceability (REQ-N-QA-06)
+        if: github.event_name == 'pull_request'
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+          uv run python scripts/check_commits.py --range "$BASE_SHA..$HEAD_SHA" --pr-body-file "$RUNNER_TEMP/pr-body.md"
+
+  types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync
+      - name: mypy strict (REQ-N-ARC-09)
+        run: uv run mypy .
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync
+      - name: Unit, architecture and contract tests
+        run: uv run pytest tests/unit tests/architecture tests/contract -m "not integration"
+      - name: Contract drift (ADR-003 §2, DEC-048)
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+        run: |
+          uv run python manage.py spectacular --validate --fail-on-warn --file "$RUNNER_TEMP/generated.yaml"
+          base_pending=()
+          if git show "origin/$BASE_REF:contract/pending-operations.txt" > "$RUNNER_TEMP/base-pending.txt" 2>/dev/null; then
+            base_pending=(--base-pending "$RUNNER_TEMP/base-pending.txt")
+          fi
+          uv run python scripts/contract_drift.py --approved contract/openapi.v1.yaml \
+            --generated "$RUNNER_TEMP/generated.yaml" --pending contract/pending-operations.txt "${base_pending[@]}"
+      - name: Breaking contract changes (oasdiff, ADR-003 §4)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          if ! git show "origin/$BASE_REF:contract/openapi.v1.yaml" > "$RUNNER_TEMP/base.yaml" 2>/dev/null; then
+            echo "No contract on $BASE_REF yet: nothing to compare."
+            exit 0
+          fi
+          archive="oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
+          base_url="https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}"
+          curl -fsSLo "$RUNNER_TEMP/$archive" "$base_url/$archive"
+          curl -fsSLo "$RUNNER_TEMP/checksums.txt" "$base_url/checksums.txt"
+          (cd "$RUNNER_TEMP" && grep " $archive\$" checksums.txt | sha256sum --check --strict)
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP" oasdiff
+          "$RUNNER_TEMP/oasdiff" breaking "$RUNNER_TEMP/base.yaml" contract/openapi.v1.yaml --fail-on ERR
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync
+      - name: pip-audit (REQ-N-QA-04)
+        run: |
+          uv export --format requirements-txt --no-emit-project -o "$RUNNER_TEMP/requirements.txt"
+          uv run pip-audit -r "$RUNNER_TEMP/requirements.txt" --require-hashes --disable-pip --progress-spinner off
+
+  integration:
+    needs: [lint, types, unit]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.7-alpine
+        env:
+          POSTGRES_DB: cherrylove
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+      redis:
+        image: redis:8.8.4-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping" --health-interval 2s --health-timeout 5s --health-retries 30
+      mailpit:
+        image: axllent/mailpit:v1.33.1
+        ports: ["1025:1025", "8025:8025"]
+      storage:
+        image: versity/versitygw:v1.11.0 # DEC-047
+        env:
+          ROOT_ACCESS_KEY: localaccesskey
+          ROOT_SECRET_KEY: localsecretkey
+          VGW_BACKEND: posix
+          VGW_BACKEND_ARG: /data
+          VGW_ARGS: --port :7070 --region us-east-1
+        ports: ["7070:7070"]
+        volumes: ["storage-data:/data"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: cmlooz/cherryLove-docs
+          path: cherryLove-docs
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync
+      - name: Database roles (ADR-008 §4)
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          POSTGRES_DB: cherrylove
+          APP_DB_PASSWORD: local-app
+          MAINTENANCE_DB_PASSWORD: local-maintenance
+        run: sh scripts/db/create_roles.sh
+      - name: Storage bucket (compose.yaml creates it with storage-init)
+        run: |
+          uv run python -c "import sys; sys.path.insert(0, '.'); from tests.integration.stack import s3_client, S3_BUCKET; s3_client().create_bucket(Bucket=S3_BUCKET)"
+      - name: Migrations are complete and run as maintenance
+        run: |
+          uv run python manage.py makemigrations --check --dry-run
+          uv run python manage.py migrate --database maintenance
+      - name: All tests with coverage
+        run: uv run pytest --cov --cov-report=xml --cov-report=term
+      - name: Coverage gates (ADR-014 §7)
+        run: |
+          uv run coverage report --fail-under=80
+          uv run coverage report --include='src/cherrylove/*/domain/*,src/cherrylove/*/application/*' --fail-under=90
+      - name: REQ → tests matrix (ADR-014 §6)
+        run: |
+          uv run python scripts/req_matrix.py \
+            --catalog cherryLove-docs/02-requirements/functional.md \
+            --catalog cherryLove-docs/02-requirements/nfr.md \
+            --output req-matrix.md tests
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            req-matrix.md
+            coverage.xml
+
+  ci:
+    if: always()
+    needs: [lint, types, unit, audit, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every job succeeded
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for result in $RESULTS; do [ "$result" = success ] || exit 1; done
