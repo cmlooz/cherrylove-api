@@ -3,7 +3,7 @@ name = "cherrylove-api"
 version = "0.0.0"
 description = "CherryLove API, Django Admin and worker"
 readme = "README.md"
-requires-python = "==3.14.*"
+requires-python = "==3.14.10"
 dependencies = [
   "boto3==1.44.4",
 ]

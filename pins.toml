@@ -1,0 +1,47 @@
+# Exact pins: ADR-016, re-verified by IMPL-API-001 §1 and the F0 re-check (2026-11-17, REQ-N-QA-05).
+# tests/architecture/test_toolchain.py fails if uv.lock drifts from this file.
+# A dependency is listed in pyproject.toml only from the step that first uses it (REQ-N-ARC-06).
+
+[python]
+version = "3.14.10"
+
+[runtime]
+django = "5.2.19"
+djangorestframework = "3.18.3"
+drf-spectacular = "0.30.0"
+djangorestframework-simplejwt = "5.5.1"
+argon2-cffi = "25.1.0"
+psycopg = "3.3.9"
+cryptography = "50.0.2"
+boto3 = "1.44.4"            # ADR-016 1.44.1, patch bump (F0 re-check)
+pillow = "13.0.0"
+redis = "8.1.0"
+django-tasks = "0.12.0"
+django-tasks-db = "0.13.0"
+pywebpush = "2.5.0"
+requests = "2.34.2"
+
+[dev]
+mypy = "2.4.1"
+django-stubs = "6.1.2"
+djangorestframework-stubs = "3.18.2"
+ruff = "0.17.5"             # ADR-016 0.17.4, patch bump (IMPL-API-001 §1)
+import-linter = "2.16"
+pytest = "9.2.0"
+pytest-django = "4.14.0"
+pytest-cov = "7.1.0"
+hypothesis = "6.170.15"
+pip-audit = "2.10.1"
+
+[tools]
+uv = "0.13.9"               # ADR-016 0.13.7 → 0.13.8 (§1) → 0.13.9 (F0 re-check)
+oasdiff = "1.37.0"
+k6 = "2.3.0"
+redocly-cli = "2.77.0"
+
+[images]
+python = "3.14.10-slim"
+postgres = "18.7-alpine"    # ADR-016 18.6, patch bump (image published, F0 re-check)
+redis = "8.8.4-alpine"
+mailpit = "v1.33.1"
+versitygw = "v1.11.0"       # DEC-047
