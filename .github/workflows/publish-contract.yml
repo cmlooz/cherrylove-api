@@ -1,0 +1,46 @@
+# Publishes the contract as release `contract-v<info.version>` with YAML and JSON assets (ADR-003 §3, DEC-044)
+# on merges that touch contract/. CI already forced a version bump on every contract change.
+name: publish-contract
+
+on:
+  push:
+    branches: [main]
+    paths: ["contract/**"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.9"
+          enable-cache: true
+      - run: uv sync --frozen
+      - name: Build YAML and JSON assets and check they match
+        run: |
+          mkdir -p dist
+          cp contract/openapi.v1.yaml dist/openapi.v1.yaml
+          uv run python scripts/contract_json.py export dist/openapi.v1.yaml dist/openapi.v1.json
+          uv run python scripts/contract_json.py check dist/openapi.v1.yaml dist/openapi.v1.json
+          echo "VERSION=$(uv run python scripts/contract_json.py version dist/openapi.v1.yaml)" >> "$GITHUB_ENV"
+      - name: Create release contract-v${{ env.VERSION }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+        run: |
+          tag="contract-v${VERSION}"
+          if gh release view "$tag" > /dev/null 2>&1; then
+            echo "$tag already exists: a contract change must bump info.version." >&2
+            exit 1
+          fi
+          gh release create "$tag" dist/openapi.v1.yaml dist/openapi.v1.json \
+            --target "$SHA" --title "Contract $tag" \
+            --notes "OpenAPI v1 contract ${VERSION} (ADR-003 §3). Same content as YAML and JSON (DEC-044)."

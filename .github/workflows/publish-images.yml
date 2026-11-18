@@ -1,0 +1,37 @@
+# Publishes the API and worker images to GitHub Container Registry on every merge to main (ADR-015 §4).
+# No third-party actions: docker and the GITHUB_TOKEN only; `packages: write` only here (ADR-015 §3).
+name: publish-images
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Log in to ghcr.io
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$ACTOR" --password-stdin
+      - name: Build and push, tagged with the commit SHA and main
+        env:
+          OWNER: ${{ github.repository_owner }}
+          SHA: ${{ github.sha }}
+        run: |
+          for target in api worker; do
+            image="ghcr.io/${OWNER,,}/cherrylove-${target}"
+            docker build --target "$target" -t "$image:$SHA" -t "$image:main" .
+            docker push "$image:$SHA"
+            docker push "$image:main"
+          done
