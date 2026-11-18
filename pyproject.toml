@@ -1,0 +1,26 @@
+[project]
+name = "cherrylove-api"
+version = "0.0.0"
+description = "CherryLove API, Django Admin and worker"
+readme = "README.md"
+requires-python = "==3.14.*"
+dependencies = [
+  "boto3==1.44.4",
+]
+
+[dependency-groups]
+dev = [
+  "pytest==9.2.0",
+]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+addopts = "--strict-markers --strict-config -ra"
+testpaths = ["tests"]
+markers = [
+  "req(id): requirement the test proves (ADR-014 §6, REQ-N-QA-06)",
+  "integration: needs real infrastructure (Docker)",
+  "spike: DEC-037 local S3 server spike, needs spike/compose.s3.yaml",
+]

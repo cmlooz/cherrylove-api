@@ -1,0 +1,71 @@
+# DEC-037 spike: candidate local S3-compatible servers, one per service.
+# Throwaway credentials for local containers only (not secrets, DEC-039).
+# This file is deleted in F0.4 once DEC-047 picks the server.
+#
+#   docker compose -f spike/compose.s3.yaml up -d --wait
+#   sh spike/bootstrap_garage.sh
+#   uv run pytest tests/integration/media/test_presigned_post_acceptance.py -m spike
+#   docker compose -f spike/compose.s3.yaml down -v
+
+name: cherrylove-s3-spike
+
+services:
+  rustfs:
+    image: rustfs/rustfs:1.0.6
+    environment:
+      RUSTFS_VOLUMES: /data
+      RUSTFS_ADDRESS: 0.0.0.0:9000
+      RUSTFS_CONSOLE_ENABLE: "false"
+      RUSTFS_ACCESS_KEY: spikeaccesskey
+      RUSTFS_SECRET_KEY: spikesecretkey
+      RUSTFS_OBS_LOG_DIRECTORY: /logs
+      # Single local disk: the topology check targets production clusters.
+      RUSTFS_UNSAFE_BYPASS_DISK_CHECK: "true"
+    volumes:
+      - rustfs-data:/data
+      - rustfs-logs:/logs
+    ports:
+      - "127.0.0.1:9100:9000"
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.54
+    command:
+      - server
+      - -dir=/data
+      - -master.volumeSizeLimitMB=64
+      - -s3
+      - -s3.port=8333
+      - -s3.config=/etc/seaweedfs/s3.json
+    volumes:
+      - seaweedfs-data:/data
+      - ./seaweedfs-s3.json:/etc/seaweedfs/s3.json:ro
+    ports:
+      - "127.0.0.1:9200:8333"
+
+  versitygw:
+    image: versity/versitygw:v1.11.0
+    environment:
+      ROOT_ACCESS_KEY: spikeaccesskey
+      ROOT_SECRET_KEY: spikesecretkey
+      VGW_BACKEND: posix
+      VGW_BACKEND_ARG: /data
+      VGW_ARGS: --port :7070 --region us-east-1
+    volumes:
+      - versitygw-data:/data
+    ports:
+      - "127.0.0.1:9300:7070"
+
+  garage:
+    image: dxflrs/garage:v2.5.0
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garage-data:/var/lib/garage
+    ports:
+      - "127.0.0.1:9400:3900"
+
+volumes:
+  rustfs-data:
+  rustfs-logs:
+  seaweedfs-data:
+  versitygw-data:
+  garage-data:
