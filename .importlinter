@@ -1,0 +1,83 @@
+# Architecture fitness functions (ADR-001 §2, §3, §6; REQ-N-ARC-01). Run: lint-imports
+[importlinter]
+root_packages =
+    cherrylove
+include_external_packages = True
+
+[importlinter:contract:layers]
+name = Layers inside every module point inward (ADR-001 §2)
+type = layers
+containers =
+    cherrylove.identity
+    cherrylove.cards
+    cherrylove.memories
+    cherrylove.media
+    cherrylove.diary
+    cherrylove.favorites
+    cherrylove.notifications
+    cherrylove.sync
+    cherrylove.audit
+    cherrylove.backoffice
+    cherrylove.shared
+layers =
+    interfaces | infrastructure
+    application
+    domain
+
+[importlinter:contract:independence]
+name = Modules talk only through application.public (ADR-001 §3)
+type = independence
+modules =
+    cherrylove.identity
+    cherrylove.cards
+    cherrylove.memories
+    cherrylove.media
+    cherrylove.diary
+    cherrylove.favorites
+    cherrylove.notifications
+    cherrylove.sync
+    cherrylove.audit
+    cherrylove.backoffice
+ignore_imports =
+    cherrylove.** -> cherrylove.*.application.public
+# Facades appear module by module; an allowance with no import yet is not an error.
+unmatched_ignore_imports_alerting = none
+
+[importlinter:contract:kernel]
+name = The shared kernel depends on no module (ADR-001 §1)
+type = forbidden
+source_modules =
+    cherrylove.shared
+forbidden_modules =
+    cherrylove.identity
+    cherrylove.cards
+    cherrylove.memories
+    cherrylove.media
+    cherrylove.diary
+    cherrylove.favorites
+    cherrylove.notifications
+    cherrylove.sync
+    cherrylove.audit
+    cherrylove.backoffice
+
+[importlinter:contract:pure-domain]
+name = Domain is plain Python: no Django, no DRF, only shared.domain (ADR-001 §2)
+type = forbidden
+source_modules =
+    cherrylove.identity.domain
+    cherrylove.cards.domain
+    cherrylove.memories.domain
+    cherrylove.media.domain
+    cherrylove.diary.domain
+    cherrylove.favorites.domain
+    cherrylove.notifications.domain
+    cherrylove.sync.domain
+    cherrylove.audit.domain
+    cherrylove.backoffice.domain
+    cherrylove.shared.domain
+forbidden_modules =
+    django
+    rest_framework
+    cherrylove.shared.application
+    cherrylove.shared.infrastructure
+    cherrylove.shared.interfaces
