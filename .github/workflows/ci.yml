@@ -98,6 +98,14 @@ jobs:
             echo "No contract on $BASE_REF yet: nothing to compare."
             exit 0
           fi
+          if ! cmp -s "$RUNNER_TEMP/base.yaml" contract/openapi.v1.yaml; then
+            base_version=$(uv run python scripts/contract_json.py version "$RUNNER_TEMP/base.yaml")
+            head_version=$(uv run python scripts/contract_json.py version contract/openapi.v1.yaml)
+            if [ "$base_version" = "$head_version" ]; then
+              echo "The contract changed but info.version is still $head_version: bump it (ADR-003 §3)." >&2
+              exit 1
+            fi
+          fi
           archive="oasdiff_${OASDIFF_VERSION}_linux_amd64.tar.gz"
           base_url="https://github.com/oasdiff/oasdiff/releases/download/v${OASDIFF_VERSION}"
           curl -fsSLo "$RUNNER_TEMP/$archive" "$base_url/$archive"
@@ -203,9 +211,52 @@ jobs:
             req-matrix.md
             coverage.xml
 
+  images:
+    needs: [unit]
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18.7-alpine
+        env:
+          POSTGRES_DB: cherrylove
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: ${{ env.UV_VERSION }}
+          enable-cache: true
+      - run: uv sync
+      - name: Database roles and schema
+        env:
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          POSTGRES_DB: cherrylove
+          APP_DB_PASSWORD: local-app
+          MAINTENANCE_DB_PASSWORD: local-maintenance
+        run: |
+          sh scripts/db/create_roles.sh
+          uv run python manage.py migrate --database maintenance
+      - name: Build api and worker images (ADR-015 §4)
+        run: |
+          docker build --target api -t cherrylove-api:ci .
+          docker build --target worker -t cherrylove-worker:ci .
+      - name: Images start, answer /healthz and run as non-root
+        env:
+          CHERRYLOVE_API_IMAGE: cherrylove-api:ci
+          CHERRYLOVE_WORKER_IMAGE: cherrylove-worker:ci
+        run: uv run pytest tests/integration/test_images.py -p no:cacheprovider
+
   ci:
     if: always()
-    needs: [lint, types, unit, audit, integration]
+    needs: [lint, types, unit, audit, integration, images]
     runs-on: ubuntu-latest
     steps:
       - name: Every job succeeded

@@ -1,0 +1,17 @@
+.git
+.github
+.githooks
+.venv
+.env
+.env.*
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage*
+coverage.xml
+tests
+scripts
+spike
+compose.yaml
