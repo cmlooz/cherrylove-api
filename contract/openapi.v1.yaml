@@ -1,6 +1,6 @@
 openapi: 3.1.0
-# API-001 — OpenAPI v1 skeleton. Approved contract source until session R moves it to
-# cherrylove-api/contract/openapi.v1.yaml (ADR-003 §1). Conventions: ADR-003 §5.
+# CherryLove OpenAPI v1 contract (ADR-003 §1). Imported from API-001 in IMPL-API-001 F0.7; this file is now
+# the source of truth. Any change is a contract change that Camilo approves explicitly. Conventions: ADR-003 §5.
 x-doc:
   id: API-001
   status: approved
@@ -9,13 +9,15 @@ x-doc:
   implements: [ADR-003, ADR-004, ADR-005, ADR-006, ADR-007, ADR-010, DATA-001]
 info:
   title: CherryLove API
-  version: 1.0.0-skeleton
+  version: 1.0.0
   license:
     name: Proprietary (private project)
     identifier: LicenseRef-Proprietary
   description: |
-    Skeleton of every v1 endpoint per module. Field lists are the contract minimum; plan F completes
-    examples and per-endpoint error-code enums before the first implementation step.
+    Every v1 endpoint per module. Each 4xx response narrows `Problem.code` to the codes that endpoint can
+    return (ADR-010 §2); validation errors carry `errors[].code` values from `FieldErrorCode` (DEC-046).
+    Schema `default`s on upsert inputs apply on create only: an edit that omits the field keeps the stored
+    value. IMPL-API-001 F0.8 added client-reported views (DEC-049) and `media_asset` sync changes (DEC-050).
 servers:
   - url: /api/v1
 security:
@@ -30,6 +32,7 @@ tags:
   - { name: media, description: "Uploads and signed URLs (ADR-007)" }
   - { name: notifications, description: "Devices and preferences (REQ-F-NOTIF)" }
   - { name: sync, description: "Offline push/pull (ADR-006)" }
+  - { name: audit, description: "Client-reported view events (REQ-F-LOG-01, REQ-F-ADM-06, DEC-049)" }
 
 paths:
   # ---------------------------------------------------------------- identity
@@ -52,8 +55,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TokenPair" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "401": { $ref: "#/components/responses/Problem" }
-        "429": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/InvalidCredentials" }
+        "409": { $ref: "#/components/responses/CoupleArchived" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /auth/refresh:
     post:
       tags: [identity]
@@ -73,7 +78,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TokenPair" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/ClientHeaderRequired" }
   /auth/logout:
     post:
       tags: [identity]
@@ -88,7 +94,8 @@ paths:
             schema: { $ref: "#/components/schemas/RefreshInput" }
       responses:
         "204": { description: Refresh token blacklisted; cookie cleared on web. }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/ClientHeaderRequired" }
   /auth/password-recovery:
     post:
       tags: [identity]
@@ -99,13 +106,16 @@ paths:
         required: true
         content:
           application/json:
+            example: {"email": "camila@example.com"}
             schema:
               type: object
               required: [email]
               properties: { email: { type: string, format: email } }
       responses:
         "202": { description: Always accepted. }
-        "429": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /auth/password-recovery/confirm:
     post:
       tags: [identity]
@@ -116,6 +126,7 @@ paths:
         required: true
         content:
           application/json:
+            example: {"uid": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "token": "c2V0LXBhc3N3b3Jk", "new_password": "a new long passphrase"}
             schema:
               type: object
               required: [uid, token, new_password]
@@ -126,6 +137,8 @@ paths:
       responses:
         "204": { description: Password changed; all sessions revoked. }
         "400": { $ref: "#/components/responses/ValidationFailed" }
+        "429": { $ref: "#/components/responses/RateLimited" }
+        "503": { $ref: "#/components/responses/ServiceUnavailable" }
   /invites/{token}:
     get:
       tags: [identity]
@@ -139,8 +152,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/InvitePreview" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/InviteConflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /invites/{token}/accept:
     post:
       tags: [identity]
@@ -160,7 +174,9 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TokenPair" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "409": { $ref: "#/components/responses/Problem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/InviteConflict" }
+        "429": { $ref: "#/components/responses/RateLimited" }
   /me:
     get:
       tags: [identity]
@@ -172,7 +188,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
     patch:
       tags: [identity]
       operationId: identity_update_me
@@ -189,7 +205,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Me" }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /me/password:
     post:
       tags: [identity]
@@ -199,6 +215,7 @@ paths:
         required: true
         content:
           application/json:
+            example: {"current_password": "correct horse battery", "new_password": "a new long passphrase"}
             schema:
               type: object
               required: [current_password, new_password]
@@ -207,9 +224,9 @@ paths:
                 new_password: { type: string, minLength: 10 }
       responses:
         "204": { description: Changed. }
-        "400": { $ref: "#/components/responses/ValidationFailed" }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   # ---------------------------------------------------------------- home
   /couple:
     get:
@@ -222,7 +239,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Couple" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /home:
     get:
       tags: [home]
@@ -235,8 +252,9 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/HomeDashboard" }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   # ---------------------------------------------------------------- cards
   /cards/today:
     get:
@@ -249,7 +267,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/TodayCards" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /cards/mine:
     get:
       tags: [cards]
@@ -262,7 +280,8 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/CardPage" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /cards/pending-count:
     get:
       tags: [cards]
@@ -273,11 +292,12 @@ paths:
           description: Counter.
           content:
             application/json:
+              example: {"count": 2}
               schema:
                 type: object
                 required: [count]
                 properties: { count: { type: integer, minimum: 0 } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /cards/{card_id}:
     parameters: [{ $ref: "#/components/parameters/CardId" }]
     get:
@@ -286,8 +306,8 @@ paths:
       summary: Card detail (partner's scheduled card → 404, ADR-005 §4)
       responses:
         "200": { description: Card., content: { application/json: { schema: { $ref: "#/components/schemas/Card" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [cards]
       operationId: cards_upsert_card
@@ -301,20 +321,22 @@ paths:
         "200": { description: Updated., content: { application/json: { schema: { $ref: "#/components/schemas/Card" } } } }
         "201": { description: Created., content: { application/json: { schema: { $ref: "#/components/schemas/Card" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/CardAlreadyPublished" }
+        "410": { $ref: "#/components/responses/EntityDeleted" }
     delete:
       tags: [cards]
       operationId: cards_delete_card
       summary: Delete a scheduled card (REQ-F-CARD-07)
       responses:
         "204": { description: Tombstoned. }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/CardAlreadyPublished" }
   # ---------------------------------------------------------------- memories
   /memories:
     get:
@@ -324,7 +346,8 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
       responses:
         "200": { description: Page., content: { application/json: { schema: { $ref: "#/components/schemas/MemoryPage" } } } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /memories/{memory_id}:
     parameters: [{ $ref: "#/components/parameters/MemoryId" }]
     get:
@@ -333,8 +356,8 @@ paths:
       summary: Memory detail
       responses:
         "200": { description: Memory., content: { application/json: { schema: { $ref: "#/components/schemas/Memory" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [memories]
       operationId: memories_upsert_memory
@@ -346,18 +369,20 @@ paths:
         "200": { description: Updated., content: { application/json: { schema: { $ref: "#/components/schemas/Memory" } } } }
         "201": { description: Created., content: { application/json: { schema: { $ref: "#/components/schemas/Memory" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/MediaRejected" }
+        "410": { $ref: "#/components/responses/EntityDeleted" }
     delete:
       tags: [memories]
       operationId: memories_delete_memory
       summary: Delete own memory (REQ-F-MEM-07)
       responses:
         "204": { description: Tombstoned. }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /songs:
     get:
       tags: [memories]
@@ -366,7 +391,8 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
       responses:
         "200": { description: Page., content: { application/json: { schema: { $ref: "#/components/schemas/SongPage" } } } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /songs/{song_id}:
     parameters: [{ $ref: "#/components/parameters/SongId" }]
     get:
@@ -375,8 +401,8 @@ paths:
       summary: Song with related memory IDs (REQ-F-SONG-03/07)
       responses:
         "200": { description: Song., content: { application/json: { schema: { $ref: "#/components/schemas/Song" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [memories]
       operationId: memories_upsert_song
@@ -388,17 +414,20 @@ paths:
         "200": { description: Updated., content: { application/json: { schema: { $ref: "#/components/schemas/Song" } } } }
         "201": { description: Created., content: { application/json: { schema: { $ref: "#/components/schemas/Song" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/MediaRejected" }
+        "410": { $ref: "#/components/responses/EntityDeleted" }
     delete:
       tags: [memories]
       operationId: memories_delete_song
       summary: Delete own song (REQ-F-SONG-08)
       responses:
         "204": { description: Tombstoned; memories keep existing without song. }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /places:
     get:
       tags: [memories]
@@ -407,7 +436,8 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
       responses:
         "200": { description: Page., content: { application/json: { schema: { $ref: "#/components/schemas/PlacePage" } } } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /places/{place_id}:
     parameters: [{ $ref: "#/components/parameters/PlaceId" }]
     get:
@@ -416,8 +446,8 @@ paths:
       summary: Place with its memory IDs (REQ-F-PLACE-03)
       responses:
         "200": { description: Place., content: { application/json: { schema: { $ref: "#/components/schemas/Place" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [memories]
       operationId: memories_upsert_place
@@ -429,18 +459,20 @@ paths:
         "200": { description: Updated., content: { application/json: { schema: { $ref: "#/components/schemas/Place" } } } }
         "201": { description: Created., content: { application/json: { schema: { $ref: "#/components/schemas/Place" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/EntityDeleted" }
     delete:
       tags: [memories]
       operationId: memories_delete_place
       summary: Delete own place; its memories are unlinked (REQ-F-PLACE-05)
       responses:
         "204": { description: Tombstoned. }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
   # ---------------------------------------------------------------- diary
   /notes:
     get:
@@ -450,7 +482,8 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
       responses:
         "200": { description: Page., content: { application/json: { schema: { $ref: "#/components/schemas/NotePage" } } } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /notes/{note_id}:
     parameters: [{ $ref: "#/components/parameters/NoteId" }]
     get:
@@ -459,8 +492,8 @@ paths:
       summary: Note reader (partner's only_me → 404)
       responses:
         "200": { description: Note., content: { application/json: { schema: { $ref: "#/components/schemas/Note" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
     put:
       tags: [diary]
       operationId: diary_upsert_note
@@ -472,18 +505,20 @@ paths:
         "200": { description: Updated., content: { application/json: { schema: { $ref: "#/components/schemas/Note" } } } }
         "201": { description: Created., content: { application/json: { schema: { $ref: "#/components/schemas/Note" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "403": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "410": { $ref: "#/components/responses/EntityDeleted" }
     delete:
       tags: [diary]
       operationId: diary_delete_note
       summary: Delete own note (REQ-F-NOTE-05)
       responses:
         "204": { description: Tombstoned. }
-        "403": { $ref: "#/components/responses/Problem" }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "403": { $ref: "#/components/responses/NotAuthor" }
+        "404": { $ref: "#/components/responses/NotFound" }
   # ---------------------------------------------------------------- favorites
   /favorites:
     get:
@@ -498,7 +533,8 @@ paths:
         - { $ref: "#/components/parameters/Limit" }
       responses:
         "200": { description: Page., content: { application/json: { schema: { $ref: "#/components/schemas/FavoritePage" } } } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /favorites/{favorite_id}:
     parameters: [{ $ref: "#/components/parameters/FavoriteId" }]
     put:
@@ -510,18 +546,19 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/FavoriteInput" } } }
       responses:
         "201": { description: Starred., content: { application/json: { schema: { $ref: "#/components/schemas/Favorite" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/AlreadyFavorited" }
     delete:
       tags: [favorites]
       operationId: favorites_unstar_item
       summary: Remove a favorite (REQ-F-FAV-01)
       responses:
         "204": { description: Unstarred. }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
   # ---------------------------------------------------------------- media
   /media/uploads:
     post:
@@ -534,8 +571,8 @@ paths:
       responses:
         "201": { description: Presigned POST., content: { application/json: { schema: { $ref: "#/components/schemas/PresignedPost" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "409": { $ref: "#/components/responses/UploadRefused" }
   /media/uploads/{media_id}/complete:
     parameters: [{ $ref: "#/components/parameters/MediaId" }]
     post:
@@ -544,9 +581,9 @@ paths:
       summary: Mark upload finished; validation runs in the worker (ADR-007 §3)
       responses:
         "202": { description: Validation enqueued., content: { application/json: { schema: { $ref: "#/components/schemas/MediaAsset" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "409": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/MediaRejected" }
   /media/urls:
     post:
       tags: [media]
@@ -556,6 +593,7 @@ paths:
         required: true
         content:
           application/json:
+            example: {"items": [{"media_id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "variant": "thumb_400"}]}
             schema:
               type: object
               required: [items]
@@ -588,7 +626,8 @@ paths:
                         variant: { type: string }
                         url: { type: string, format: uri }
                         expires_at: { type: string, format: date-time }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /media/{media_id}:
     parameters: [{ $ref: "#/components/parameters/MediaId" }]
     get:
@@ -597,9 +636,9 @@ paths:
       summary: Asset status and variants
       responses:
         "200": { description: Asset., content: { application/json: { schema: { $ref: "#/components/schemas/MediaAsset" } } } }
-        "404": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
   # ---------------------------------------------------------------- notifications
   /me/notification-preferences:
     get:
@@ -608,7 +647,7 @@ paths:
       summary: Read my notification toggles (REQ-F-ACC-05)
       responses:
         "200": { description: Preferences., content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
     put:
       tags: [notifications]
       operationId: notifications_update_preferences
@@ -618,7 +657,8 @@ paths:
         content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } }
       responses:
         "200": { description: Saved., content: { application/json: { schema: { $ref: "#/components/schemas/NotificationPreferences" } } } }
-        "401": { $ref: "#/components/responses/Problem" }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /me/devices:
     post:
       tags: [notifications]
@@ -630,7 +670,7 @@ paths:
       responses:
         "201": { description: Registered., content: { application/json: { schema: { $ref: "#/components/schemas/Device" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /me/devices/{device_id}:
     parameters: [{ $ref: "#/components/parameters/DeviceId" }]
     delete:
@@ -639,8 +679,9 @@ paths:
       summary: Unregister a device (REQ-F-NOTIF-03)
       responses:
         "204": { description: Removed. }
-        "401": { $ref: "#/components/responses/Problem" }
 
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "404": { $ref: "#/components/responses/NotFound" }
   # ---------------------------------------------------------------- sync
   /sync/push:
     post:
@@ -653,7 +694,7 @@ paths:
       responses:
         "200": { description: One result per op., content: { application/json: { schema: { $ref: "#/components/schemas/SyncPushResult" } } } }
         "400": { $ref: "#/components/responses/ValidationFailed" }
-        "401": { $ref: "#/components/responses/Problem" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
   /sync/pull:
     get:
       tags: [sync]
@@ -662,8 +703,26 @@ paths:
       parameters: [{ $ref: "#/components/parameters/Cursor" }, { $ref: "#/components/parameters/Limit" }]
       responses:
         "200": { description: Changes., content: { application/json: { schema: { $ref: "#/components/schemas/SyncPullResult" } } } }
-        "410": { $ref: "#/components/responses/Problem" }
-        "401": { $ref: "#/components/responses/Problem" }
+
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
+        "410": { $ref: "#/components/responses/CursorExpired" }
+  # ---------------------------------------------------------------- audit
+  /views:
+    post:
+      tags: [audit]
+      operationId: audit_record_views
+      summary: Batch of views read from the local store, queued offline (REQ-F-LOG-01, REQ-F-ADM-06, DEC-049)
+      description: |
+        Metadata only, never content. Retries are idempotent by view `id`. A view of an entity the actor
+        cannot see is dropped silently (no 404), so the response never reveals that an ID exists (ADR-005 §4).
+      requestBody:
+        required: true
+        content: { application/json: { schema: { $ref: "#/components/schemas/ViewsInput" } } }
+      responses:
+        "202": { description: Accepted for the audit log. }
+        "400": { $ref: "#/components/responses/ValidationFailed" }
+        "401": { $ref: "#/components/responses/Unauthenticated" }
 
 components:
   securitySchemes:
@@ -686,16 +745,120 @@ components:
     DeviceId: { name: device_id, in: path, required: true, schema: { $ref: "#/components/schemas/Uuid" } }
 
   responses:
-    Problem:
-      description: RFC 9457 problem (ADR-010).
-      content:
-        application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
     ValidationFailed:
-      description: Invalid input; field errors in `errors` (ADR-010 §1).
+      description: "Invalid input; field errors in `errors[]` with `FieldErrorCode` values (ADR-010 §1, DEC-046)."
       content:
         application/problem+json:
-          schema: { $ref: "#/components/schemas/Problem" }
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [validation_failed] } } }]
+          example: {"type": "/problems/validation-failed", "title": "Invalid input", "status": 400, "code": "validation_failed", "request_id": "9f1c2b7e4a5d4c3b", "errors": [{"pointer": "/body", "code": "too_long", "params": {"max": 2000}}]}
+    Unauthenticated:
+      description: "Missing, invalid or expired token (ADR-004)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [not_authenticated, token_expired] } } }]
+          example: {"type": "/problems/token-expired", "title": "Token expired", "status": 401, "code": "token_expired", "request_id": "9f1c2b7e4a5d4c3b"}
+    InvalidCredentials:
+      description: "Wrong email or password; same answer for an unknown email (ADR-004 §4)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [invalid_credentials] } } }]
+          example: {"type": "/problems/invalid-credentials", "title": "Invalid credentials", "status": 401, "code": "invalid_credentials", "request_id": "9f1c2b7e4a5d4c3b"}
+    NotAuthor:
+      description: "The item is visible but only its author may change it (ADR-005 §4)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [not_author] } } }]
+          example: {"type": "/problems/not-author", "title": "Not the author", "status": 403, "code": "not_author", "request_id": "9f1c2b7e4a5d4c3b"}
+    ClientHeaderRequired:
+      description: "Cookie-based call without `X-CherryLove-Client: web` (CSRF defense, ADR-004 §2)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [client_header_required] } } }]
+          example: {"type": "/problems/client-header-required", "title": "Client header required", "status": 403, "code": "client_header_required", "request_id": "9f1c2b7e4a5d4c3b"}
+    NotFound:
+      description: "Not found or not visible to this actor (ADR-005 §4)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [not_found] } } }]
+          example: {"type": "/problems/not-found", "title": "Not found", "status": 404, "code": "not_found", "request_id": "9f1c2b7e4a5d4c3b"}
+    InviteConflict:
+      description: "The invite can no longer be used (REQ-F-AUTH-02/05, DEC-017, DEC-019)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [invite_expired, invite_revoked, couple_full, couple_archived] } } }]
+          example: {"type": "/problems/invite-expired", "title": "Invite expired", "status": 409, "code": "invite_expired", "request_id": "9f1c2b7e4a5d4c3b"}
+    CoupleArchived:
+      description: "The account's couple is archived; login is refused (REQ-F-AUTH-09, DEC-019)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [couple_archived] } } }]
+          example: {"type": "/problems/couple-archived", "title": "Couple archived", "status": 409, "code": "couple_archived", "request_id": "9f1c2b7e4a5d4c3b"}
+    CardAlreadyPublished:
+      description: "Published cards are read-only (REQ-F-CARD-07, DEC-024)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [card_already_published] } } }]
+          example: {"type": "/problems/card-already-published", "title": "Card already published", "status": 409, "code": "card_already_published", "request_id": "9f1c2b7e4a5d4c3b"}
+    MediaRejected:
+      description: "The referenced media failed validation or is not usable (ADR-007 §3)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [media_rejected] } } }]
+          example: {"type": "/problems/media-rejected", "title": "Media rejected", "status": 409, "code": "media_rejected", "request_id": "9f1c2b7e4a5d4c3b", "params": {"rejection_code": "type_mismatch"}}
+    AlreadyFavorited:
+      description: "The item is already starred under another favorite ID (IMPL-API-001 F6.3)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [already_favorited] } } }]
+          example: {"type": "/problems/already-favorited", "title": "Already favorited", "status": 409, "code": "already_favorited", "request_id": "9f1c2b7e4a5d4c3b"}
+    UploadRefused:
+      description: "Per-file limit or couple quota exceeded (REQ-F-MEM-09/10, DEC-020)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [file_too_large, quota_exceeded] } } }]
+          example: {"type": "/problems/quota-exceeded", "title": "Quota exceeded", "status": 409, "code": "quota_exceeded", "request_id": "9f1c2b7e4a5d4c3b", "params": {"limit_bytes": 5368709120}}
+    EntityDeleted:
+      description: "The entity was deleted (tombstoned); it cannot be edited again (ADR-006 §3)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [entity_deleted] } } }]
+          example: {"type": "/problems/entity-deleted", "title": "Entity deleted", "status": 410, "code": "entity_deleted", "request_id": "9f1c2b7e4a5d4c3b"}
+    CursorExpired:
+      description: "The cursor is older than the purge horizon; run a full resync (ADR-006 §4, DEC-045)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [cursor_expired] } } }]
+          example: {"type": "/problems/cursor-expired", "title": "Cursor expired", "status": 410, "code": "cursor_expired", "request_id": "9f1c2b7e4a5d4c3b"}
+    RateLimited:
+      description: "Throttled (REQ-N-SEC-04)."
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 }, description: "Seconds to wait" }
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [rate_limited] } } }]
+          example: {"type": "/problems/rate-limited", "title": "Too many requests", "status": 429, "code": "rate_limited", "request_id": "9f1c2b7e4a5d4c3b"}
+    ServiceUnavailable:
+      description: "A dependency is down; auth throttles fail closed (ADR-004 §4, ADR-011 §2)."
+      content:
+        application/problem+json:
+          schema:
+            allOf: [{ $ref: "#/components/schemas/Problem" }, { properties: { code: { enum: [service_unavailable] } } }]
+          example: {"type": "/problems/service-unavailable", "title": "Service unavailable", "status": 503, "code": "service_unavailable", "request_id": "9f1c2b7e4a5d4c3b"}
 
   schemas:
     Uuid: { type: string, format: uuid, description: "UUIDv7" }
@@ -706,13 +869,14 @@ components:
 
     ErrorCode:
       type: string
-      description: Stable codes (ADR-010 §2). Plan F narrows them per endpoint.
+      description: Stable codes (ADR-010 §2). Each 4xx response narrows them per endpoint.
       enum:
         - validation_failed
         - not_authenticated
         - token_expired
         - invalid_credentials
         - not_author
+        - client_header_required
         - not_found
         - card_already_published
         - quota_exceeded
@@ -729,6 +893,40 @@ components:
         - rate_limited
         - internal_error
         - service_unavailable
+    FieldErrorCode:
+      type: string
+      description: |
+        Codes for `Problem.errors[].code` (DEC-046, additive). Clients translate `validation.<code>` (ADR-010 §6).
+        Shape: required, null_not_allowed, invalid_type, invalid_format, invalid_choice, too_short, too_long,
+        below_minimum, above_maximum, too_few_items, too_many_items, not_https. Rules: invalid_uuid_version and
+        timestamp_too_far_ahead (client UUIDv7, ADR-006 §8), exactly_one_required (memory media_id / external_url),
+        invalid_reference (missing, foreign or deleted song/place/memory), invalid_media (media not pending/ready,
+        not owned by the author or of another kind), unsupported_provider_url (Spotify/YouTube link not parsed),
+        push_host_not_allowed (Web Push endpoint outside the allowlist), incorrect_password (current password on
+        change), invalid_token (recovery token wrong, expired or used), invalid_cursor (tampered or foreign cursor).
+      enum:
+        - required
+        - null_not_allowed
+        - invalid_type
+        - invalid_format
+        - invalid_choice
+        - too_short
+        - too_long
+        - below_minimum
+        - above_maximum
+        - too_few_items
+        - too_many_items
+        - not_https
+        - invalid_uuid_version
+        - timestamp_too_far_ahead
+        - exactly_one_required
+        - invalid_reference
+        - invalid_media
+        - unsupported_provider_url
+        - push_host_not_allowed
+        - incorrect_password
+        - invalid_token
+        - invalid_cursor
     Problem:
       type: object
       required: [type, title, status, code, request_id]
@@ -748,11 +946,13 @@ components:
             required: [pointer, code]
             properties:
               pointer: { type: string, examples: ["/body"] }
-              code: { type: string, examples: [too_long, required] }
+              code: { $ref: "#/components/schemas/FieldErrorCode" }
               params: { type: object, additionalProperties: true }
 
     # identity
     LoginInput:
+      examples:
+        - {"email": "camila@example.com", "password": "correct horse battery", "client": "mobile"}
       type: object
       required: [email, password, client]
       properties:
@@ -760,10 +960,14 @@ components:
         password: { type: string }
         client: { type: string, enum: [web, mobile] }
     RefreshInput:
+      examples:
+        - {"refresh": "eyJhbGciOiJIUzI1NiJ9.refresh"}
       type: object
       description: Mobile sends the refresh token in the body; web sends nothing (cookie).
       properties: { refresh: { type: string } }
     TokenPair:
+      examples:
+        - {"access": "eyJhbGciOiJIUzI1NiJ9.access", "access_expires_at": "2026-11-18T14:05:00Z", "refresh": "eyJhbGciOiJIUzI1NiJ9.refresh"}
       type: object
       required: [access, access_expires_at]
       properties:
@@ -771,12 +975,16 @@ components:
         access_expires_at: { $ref: "#/components/schemas/Timestamp" }
         refresh: { type: string, description: "Mobile only; never present for web." }
     InvitePreview:
+      examples:
+        - {"email": "andres@example.com", "relationship_start_known": true}
       type: object
       required: [email, relationship_start_known]
       properties:
         email: { type: string, format: email }
         relationship_start_known: { type: boolean, description: "If true, onboarding skips the date (REQ-F-AUTH-04)." }
     OnboardingInput:
+      examples:
+        - {"name": "Andrés", "birth_date": "1995-06-01", "password": "correct horse battery", "language": "es"}
       type: object
       required: [name, birth_date, password]
       properties:
@@ -793,6 +1001,8 @@ components:
         name: { type: string }
         avatar_media_id: { oneOf: [{ $ref: "#/components/schemas/Uuid" }, { type: "null" }] }
     Me:
+      examples:
+        - {"id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "email": "camila@example.com", "name": "Camila", "birth_date": "1996-03-09", "language": "es", "avatar_media_id": null, "partner": {"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "name": "Andrés", "avatar_media_id": null}}
       type: object
       required: [id, email, name, language]
       properties:
@@ -804,6 +1014,8 @@ components:
         avatar_media_id: { oneOf: [{ $ref: "#/components/schemas/Uuid" }, { type: "null" }] }
         partner: { oneOf: [{ $ref: "#/components/schemas/PersonSummary" }, { type: "null" }] }
     MeInput:
+      examples:
+        - {"name": "Cami", "language": "en"}
       type: object
       description: Birth date is admin-only (DEC-025).
       properties:
@@ -813,6 +1025,8 @@ components:
 
     # home
     Couple:
+      examples:
+        - {"id": "0193a5b2-af61-7a7d-8233-4e5f60718293", "partners": [{"id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "name": "Camila", "avatar_media_id": null}, {"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "name": "Andrés", "avatar_media_id": null}], "relationship_start": "2023-02-14", "days_together": 1373, "timezone": "America/Bogota", "version": 3}
       type: object
       required: [id, partners, timezone, version]
       properties:
@@ -832,6 +1046,8 @@ components:
         starred_at: { $ref: "#/components/schemas/Timestamp" }
         item_date: { $ref: "#/components/schemas/CivilDate" }
     HomeDashboard:
+      examples:
+        - {"couple": {"id": "0193a5b2-af61-7a7d-8233-4e5f60718293", "partners": [{"id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "name": "Camila", "avatar_media_id": null}, {"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "name": "Andrés", "avatar_media_id": null}], "relationship_start": "2023-02-14", "days_together": 1373, "timezone": "America/Bogota", "version": 3}, "timeline": [{"item_type": "memory", "item_id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "starred_by": ["0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "0193a5b2-9e50-7f6c-b122-3d4e5f607182"], "starred_at": "2026-11-18T14:00:00Z", "item_date": "2026-10-31"}], "next_cursor": null}
       type: object
       required: [couple, timeline, next_cursor]
       properties:
@@ -852,6 +1068,8 @@ components:
 
     # cards
     CardInput:
+      examples:
+        - {"body": "Te amo más que ayer.", "publish_at": "2026-11-19T12:00:00Z"}
       type: object
       required: [body, publish_at]
       properties:
@@ -859,6 +1077,8 @@ components:
         publish_at: { $ref: "#/components/schemas/Timestamp" }
         base_version: { type: integer }
     Card:
+      examples:
+        - {"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "body": "Te amo más que ayer.", "publish_at": "2026-11-19T12:00:00Z", "published_at": null}
       allOf:
         - { $ref: "#/components/schemas/SyncFields" }
         - type: object
@@ -868,12 +1088,16 @@ components:
             publish_at: { $ref: "#/components/schemas/Timestamp" }
             published_at: { oneOf: [{ $ref: "#/components/schemas/Timestamp" }, { type: "null" }] }
     TodayCards:
+      examples:
+        - {"mode": "today", "cards": [{"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "body": "Te amo más que ayer.", "publish_at": "2026-11-19T12:00:00Z", "published_at": "2026-11-18T12:00:00Z"}]}
       type: object
       required: [mode, cards]
       properties:
         mode: { type: string, enum: [today, random_past], description: "REQ-F-CARD-01 vs REQ-F-CARD-02" }
         cards: { type: array, items: { $ref: "#/components/schemas/Card" } }
     CardPage:
+      examples:
+        - {"results": [{"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "body": "Te amo más que ayer.", "publish_at": "2026-11-19T12:00:00Z", "published_at": null}], "next_cursor": null}
       type: object
       required: [results, next_cursor]
       properties:
@@ -882,6 +1106,8 @@ components:
 
     # memories
     MemoryInput:
+      examples:
+        - {"memory_date": "2026-10-31", "media_kind": "photo", "media_id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "description": "Halloween en casa", "place_id": "0193a5b2-af61-7a7d-8233-4e5f60718293", "base_version": 1}
       type: object
       required: [memory_date, media_kind]
       description: Exactly one of media_id / external_url (DATA-001 §4).
@@ -895,6 +1121,8 @@ components:
         place_id: { oneOf: [{ $ref: "#/components/schemas/Uuid" }, { type: "null" }] }
         base_version: { type: integer }
     Memory:
+      examples:
+        - {"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 2, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:05:00Z", "memory_date": "2026-10-31", "media_kind": "photo", "media_id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "external_url": null, "description": "Halloween en casa", "song_id": null, "place_id": "0193a5b2-af61-7a7d-8233-4e5f60718293"}
       allOf:
         - { $ref: "#/components/schemas/SyncFields" }
         - type: object
@@ -908,6 +1136,8 @@ components:
             song_id: { oneOf: [{ $ref: "#/components/schemas/Uuid" }, { type: "null" }] }
             place_id: { oneOf: [{ $ref: "#/components/schemas/Uuid" }, { type: "null" }] }
     MemoryPage:
+      examples:
+        - {"results": [{"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 2, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:05:00Z", "memory_date": "2026-10-31", "media_kind": "photo", "media_id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "external_url": null, "description": "Halloween en casa", "song_id": null, "place_id": "0193a5b2-af61-7a7d-8233-4e5f60718293"}], "next_cursor": "b3BhcXVl"}
       type: object
       required: [results, next_cursor]
       properties:
@@ -944,6 +1174,8 @@ components:
       required: [type, provider_ref]
       properties: { type: { const: youtube }, provider_ref: { type: string, description: "Video ID" } }
     SongInput:
+      examples:
+        - {"title": "Nuestra canción", "source": {"type": "spotify", "provider_ref": "4uLU6hMCjMI75M1A2tKUQC"}, "memory_ids": ["0193a5b2-9e50-7f6c-b122-3d4e5f607182"]}
       type: object
       required: [title, source]
       properties:
@@ -953,6 +1185,8 @@ components:
         memory_ids: { type: array, items: { $ref: "#/components/schemas/Uuid" }, description: "Sets memory.song_id on own memories (REQ-F-SONG-07)" }
         base_version: { type: integer }
     Song:
+      examples:
+        - {"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "title": "Nuestra canción", "source": {"type": "spotify", "provider_ref": "4uLU6hMCjMI75M1A2tKUQC"}, "note": null, "memory_ids": ["0193a5b2-9e50-7f6c-b122-3d4e5f607182"]}
       allOf:
         - { $ref: "#/components/schemas/SyncFields" }
         - type: object
@@ -963,12 +1197,16 @@ components:
             note: { type: [string, "null"] }
             memory_ids: { type: array, items: { $ref: "#/components/schemas/Uuid" } }
     SongPage:
+      examples:
+        - {"results": [{"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "title": "Nuestra canción", "source": {"type": "spotify", "provider_ref": "4uLU6hMCjMI75M1A2tKUQC"}, "note": null, "memory_ids": ["0193a5b2-9e50-7f6c-b122-3d4e5f607182"]}], "next_cursor": null}
       type: object
       required: [results, next_cursor]
       properties:
         results: { type: array, items: { $ref: "#/components/schemas/Song" } }
         next_cursor: { $ref: "#/components/schemas/NextCursor" }
     PlaceInput:
+      examples:
+        - {"name": "Parque del Perro", "latitude": 3.4372, "longitude": -76.5413}
       type: object
       required: [name, latitude, longitude]
       properties:
@@ -978,6 +1216,8 @@ components:
         description: { type: string, maxLength: 4000 }
         base_version: { type: integer }
     Place:
+      examples:
+        - {"id": "0193a5b2-af61-7a7d-8233-4e5f60718293", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "name": "Parque del Perro", "latitude": 3.4372, "longitude": -76.5413, "description": null, "memory_count": 1, "memory_ids": ["0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071"]}
       allOf:
         - { $ref: "#/components/schemas/SyncFields" }
         - type: object
@@ -990,6 +1230,8 @@ components:
             memory_count: { type: integer, minimum: 0 }
             memory_ids: { type: array, items: { $ref: "#/components/schemas/Uuid" }, description: "Detail only" }
     PlacePage:
+      examples:
+        - {"results": [{"id": "0193a5b2-af61-7a7d-8233-4e5f60718293", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "name": "Parque del Perro", "latitude": 3.4372, "longitude": -76.5413, "description": null, "memory_count": 1}], "next_cursor": null}
       type: object
       required: [results, next_cursor]
       properties:
@@ -998,13 +1240,17 @@ components:
 
     # diary
     NoteInput:
+      examples:
+        - {"body": "Hoy fue un buen día.", "visibility": "only_me"}
       type: object
       required: [body]
       properties:
         body: { type: string, minLength: 1, maxLength: 10000 }
-        visibility: { type: string, enum: [shared, only_me], default: shared }
+        visibility: { type: string, enum: [shared, only_me], default: shared, description: "Default applies on create only; an edit without it keeps the stored value (REQ-F-NOTE-05)." }
         base_version: { type: integer }
     Note:
+      examples:
+        - {"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "body": "Hoy fue un buen día.", "visibility": "shared"}
       allOf:
         - { $ref: "#/components/schemas/SyncFields" }
         - type: object
@@ -1013,6 +1259,8 @@ components:
             body: { type: string }
             visibility: { type: string, enum: [shared, only_me] }
     NotePage:
+      examples:
+        - {"results": [{"id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "author_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "version": 1, "created_at": "2026-11-18T14:00:00Z", "updated_at": "2026-11-18T14:00:00Z", "body": "Hoy fue un buen día.", "visibility": "shared"}], "next_cursor": null}
       type: object
       required: [results, next_cursor]
       properties:
@@ -1022,12 +1270,16 @@ components:
     # favorites
     FavoriteItemType: { type: string, enum: [memory, song, place, note] }
     FavoriteInput:
+      examples:
+        - {"item_type": "memory", "item_id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071"}
       type: object
       required: [item_type, item_id]
       properties:
         item_type: { $ref: "#/components/schemas/FavoriteItemType" }
         item_id: { $ref: "#/components/schemas/Uuid" }
     Favorite:
+      examples:
+        - {"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "item_type": "memory", "item_id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "user_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "item_date": "2026-10-31", "created_at": "2026-11-18T14:00:00Z"}
       type: object
       required: [id, item_type, item_id, user_id, created_at]
       properties:
@@ -1038,6 +1290,8 @@ components:
         item_date: { $ref: "#/components/schemas/CivilDate" }
         created_at: { $ref: "#/components/schemas/Timestamp" }
     FavoritePage:
+      examples:
+        - {"results": [{"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "item_type": "memory", "item_id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "user_id": "0193a5b2-7c3e-7d4a-9f00-1b2c3d4e5f60", "item_date": "2026-10-31", "created_at": "2026-11-18T14:00:00Z"}], "next_cursor": null}
       type: object
       required: [results, next_cursor]
       properties:
@@ -1046,6 +1300,8 @@ components:
 
     # media
     UploadInput:
+      examples:
+        - {"media_id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "kind": "photo", "content_type": "image/jpeg", "size_bytes": 2483021}
       type: object
       required: [media_id, kind, content_type, size_bytes]
       properties:
@@ -1054,6 +1310,8 @@ components:
         content_type: { type: string, enum: [image/jpeg, image/png, image/webp, video/mp4, video/quicktime, audio/mpeg, audio/mp4] }
         size_bytes: { type: integer, minimum: 1 }
     PresignedPost:
+      examples:
+        - {"url": "https://storage.example.com/cherrylove-media", "fields": {"key": "quarantine/0193a5b2-af61-7a7d-8233-4e5f60718293/0193a5b2-9e50-7f6c-b122-3d4e5f607182", "Content-Type": "image/jpeg", "policy": "eyJ…", "x-amz-signature": "3f2a…"}, "expires_at": "2026-11-18T14:05:00Z"}
       type: object
       required: [url, fields, expires_at]
       properties:
@@ -1061,6 +1319,8 @@ components:
         fields: { type: object, additionalProperties: { type: string } }
         expires_at: { $ref: "#/components/schemas/Timestamp" }
     MediaAsset:
+      examples:
+        - {"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "kind": "photo", "status": "ready", "variants": ["thumb_400", "display_1600"], "rejection_code": null}
       type: object
       required: [id, kind, status]
       properties:
@@ -1072,6 +1332,8 @@ components:
 
     # notifications
     NotificationPreferences:
+      examples:
+        - {"card_published": true, "anniversary": true, "partner_birthday": false}
       type: object
       required: [card_published, anniversary, partner_birthday]
       properties:
@@ -1106,14 +1368,39 @@ components:
               required: [p256dh, auth]
               properties: { p256dh: { type: string }, auth: { type: string } }
     Device:
+      examples:
+        - {"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "channel": "expo"}
       type: object
       required: [id, channel]
       properties:
         id: { $ref: "#/components/schemas/Uuid" }
         channel: { type: string, enum: [expo, webpush] }
 
+    # audit (DEC-049)
+    ViewedEntityType: { type: string, enum: [card, memory, song, place, note] }
+    ViewInput:
+      type: object
+      required: [id, entity_type, entity_id, viewed_at]
+      properties:
+        id: { $ref: "#/components/schemas/Uuid", description: "Client UUIDv7 of this view; retries are idempotent" }
+        entity_type: { $ref: "#/components/schemas/ViewedEntityType" }
+        entity_id: { $ref: "#/components/schemas/Uuid" }
+        viewed_at: { $ref: "#/components/schemas/Timestamp" }
+    ViewsInput:
+      type: object
+      required: [views]
+      properties:
+        views: { type: array, minItems: 1, maxItems: 100, items: { $ref: "#/components/schemas/ViewInput" } }
+      examples:
+        - { views: [{ id: "0193a5b2-af61-7a7d-8233-4e5f60718293", entity_type: memory, entity_id: "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", viewed_at: "2026-11-18T14:00:00Z" }] }
+
     # sync
-    SyncEntityType: { type: string, enum: [card, memory, song, place, note, favorite, couple] }
+    SyncEntityType:
+      type: string
+      enum: [card, memory, song, place, note, favorite, couple, media_asset]
+      description: |
+        `couple` and `media_asset` are pull-only: a push op with them is `rejected`. A `media_asset` change carries
+        the `MediaAsset` record, so devices learn `ready` / `rejected` and the rejection code (DEC-050, ADR-007 §2).
     SyncOperation:
       type: object
       required: [client_op_id, entity_type, entity_id, op]
@@ -1125,6 +1412,8 @@ components:
         base_version: { type: integer }
         payload: { type: object, additionalProperties: true, description: "Same shape as the entity's *Input schema" }
     SyncPushInput:
+      examples:
+        - {"operations": [{"client_op_id": "0193a5b2-af61-7a7d-8233-4e5f60718293", "entity_type": "note", "entity_id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "op": "upsert", "base_version": 1, "payload": {"body": "Editado sin conexión"}}]}
       type: object
       required: [operations]
       properties:
@@ -1139,6 +1428,8 @@ components:
         overwrote_newer: { type: boolean }
         problem: { $ref: "#/components/schemas/Problem" }
     SyncPushResult:
+      examples:
+        - {"results": [{"client_op_id": "0193a5b2-af61-7a7d-8233-4e5f60718293", "result": "applied", "version": 2, "overwrote_newer": false}]}
       type: object
       required: [results]
       properties:
@@ -1152,6 +1443,8 @@ components:
         op: { type: string, enum: [upsert, delete] }
         record: { type: object, additionalProperties: true, description: "Entity representation; present when op = upsert" }
     SyncPullResult:
+      examples:
+        - {"changes": [{"entity_type": "media_asset", "entity_id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "op": "upsert", "record": {"id": "0193a5b2-9e50-7f6c-b122-3d4e5f607182", "kind": "photo", "status": "ready", "variants": ["thumb_400", "display_1600"], "rejection_code": null}}, {"entity_type": "card", "entity_id": "0193a5b2-8d4f-7e5b-a011-2c3d4e5f6071", "op": "delete"}], "next_cursor": "c2VxOjQy", "pending_card_count": 1}
       type: object
       required: [changes, next_cursor, pending_card_count]
       properties:
