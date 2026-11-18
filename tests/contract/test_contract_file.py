@@ -1,7 +1,4 @@
-"""The approved contract lives in contract/ unchanged (ADR-003 §1, §5).
-
-Parsed line by line on purpose: no YAML dependency enters before drf-spectacular (F0.9, REQ-N-ARC-06).
-"""
+"""The approved contract lives in contract/ unchanged (ADR-003 §1, §5). Parsed line by line on purpose."""
 
 from __future__ import annotations
 
@@ -42,8 +39,9 @@ def _operations() -> list[tuple[int, list[str], str | None]]:
 
 
 @pytest.mark.req("REQ-N-ARC-03")
-def test_contract_is_byte_identical_to_api_001() -> None:
-    assert hashlib.sha256(CONTRACT.read_bytes()).hexdigest() == SOURCE["sha256"]
+def test_contract_is_the_last_approved_version() -> None:
+    """Unreviewed edits fail: an approved change records its hash in contract/source.toml (ADR-003 §1)."""
+    assert hashlib.sha256(CONTRACT.read_bytes()).hexdigest() == SOURCE["approved"][-1]["sha256"]
     assert b"\r\n" not in CONTRACT.read_bytes()
 
 

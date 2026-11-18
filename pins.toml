@@ -32,6 +32,7 @@ pytest-django = "4.14.0"
 pytest-cov = "7.1.0"
 hypothesis = "6.170.15"
 pip-audit = "2.10.1"
+pyyaml = "6.0.3"             # not in ADR-016: contract tests parse YAML (F0.8); same version drf-spectacular 0.30.0 pulls
 
 [tools]
 uv = "0.13.9"               # ADR-016 0.13.7 → 0.13.8 (§1) → 0.13.9 (F0 re-check)

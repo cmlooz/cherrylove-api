@@ -1,6 +1,12 @@
-# Provenance of contract/openapi.v1.yaml (ADR-003 §1): byte-identical copy of the approved API-001.
-# Changing the contract is a contract change: Camilo approves it explicitly (IMPL-API-001 §2).
+# Provenance and approval of contract/openapi.v1.yaml (ADR-003 §1).
+# Origin: byte-identical copy of the approved API-001 (IMPL-API-001 F0.7).
+# Every later change is a contract change: Camilo approves it explicitly and `approved_sha256` moves with it.
 repository = "cmlooz/cherryLove-docs"
 commit = "c85068c6fd89b3c5ca3a34ffa62ab339cc93ec9c"
 path = "04-architecture/api-001-openapi-v1.yaml"
-sha256 = "ede825e13b9a223d06ac24e66e68f8d034fbae671f7bec0533e429afbf58fb11"
+origin_sha256 = "ede825e13b9a223d06ac24e66e68f8d034fbae671f7bec0533e429afbf58fb11"
+
+[[approved]]
+step = "IMPL-API-001 F0.8"
+decisions = ["DEC-046", "DEC-049", "DEC-050"]
+sha256 = "229045cff62ebd11b4336f666a170c341d7068f3dcab847aa2def953fa630486"
