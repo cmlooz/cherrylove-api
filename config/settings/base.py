@@ -17,6 +17,8 @@ DEBUG = False
 ALLOWED_HOSTS = env.csv("DJANGO_ALLOWED_HOSTS")
 
 INSTALLED_APPS = [
+    "rest_framework",
+    "drf_spectacular",
     "cherrylove.shared.apps.SharedConfig",
 ]
 
@@ -60,3 +62,28 @@ LANGUAGE_CODE = "en"
 TIME_ZONE = "UTC"
 USE_I18N = True
 USE_TZ = True
+
+# DRF without django.contrib.auth until F2.1: no session auth, no AnonymousUser model import.
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_PERMISSION_CLASSES": [],
+    "UNAUTHENTICATED_USER": None,
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+# Generated schema must match contract/openapi.v1.yaml (ADR-003 §2, DEC-048).
+SPECTACULAR_SETTINGS = {
+    "OAS_VERSION": "3.1.0",
+    "TITLE": "CherryLove API",
+    "VERSION": "1.0.0",
+    "SERVERS": [{"url": "/api/v1"}],
+    "SCHEMA_PATH_PREFIX": "/api/v1",
+    "SCHEMA_PATH_PREFIX_TRIM": True,
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "ENUM_NAME_OVERRIDES": {},  # filled as contract enums (Language, SyncEntityType, ...) get implemented
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "cherrylove.shared.interfaces.http.openapi.enforce_operation_ids",
+    ],
+}
