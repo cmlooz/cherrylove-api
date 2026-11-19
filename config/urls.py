@@ -9,3 +9,7 @@ from cherrylove.shared.interfaces.http.health import healthz
 urlpatterns = [
     path("healthz", healthz, name="healthz"),
 ]
+
+# Unknown URLs and unhandled errors answer as RFC 9457 problems too (ADR-010).
+handler404 = "cherrylove.shared.interfaces.http.problem_details.not_found_view"
+handler500 = "cherrylove.shared.interfaces.http.problem_details.server_error_view"

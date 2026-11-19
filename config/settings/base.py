@@ -69,6 +69,7 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_PERMISSION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "cherrylove.shared.interfaces.http.problem_details.exception_handler",
 }
 
 # Generated schema must match contract/openapi.v1.yaml (ADR-003 §2, DEC-048).
