@@ -20,6 +20,9 @@ ALLOWED_HOSTS = env.csv("DJANGO_ALLOWED_HOSTS")
 WEB_ORIGIN = env.required("WEB_ORIGIN")
 SECURE_REFERRER_POLICY = "no-referrer"
 
+# HMAC key for failed-login email fingerprints (ADR-008 §2): its own key, never SECRET_KEY or the KEK.
+AUDIT_HMAC_KEY = env.required("AUDIT_HMAC_KEY")
+
 INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
