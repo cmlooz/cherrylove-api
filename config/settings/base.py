@@ -26,6 +26,7 @@ INSTALLED_APPS = [
 MIGRATION_MODULES = {"shared": "cherrylove.shared.infrastructure.migrations"}
 
 MIDDLEWARE = [
+    "cherrylove.shared.interfaces.http.middleware.request_id.RequestIdMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -87,4 +88,21 @@ SPECTACULAR_SETTINGS: dict[str, object] = {
         "drf_spectacular.hooks.postprocess_schema_enums",
         "cherrylove.shared.interfaces.http.openapi.enforce_operation_ids",
     ],
+}
+
+# JSON lines to stdout with the request ID (ADR-008 §7, REQ-N-QA-01). Never content.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {"request_id": {"()": "cherrylove.shared.infrastructure.logging.RequestIdFilter"}},
+    "formatters": {"json": {"()": "cherrylove.shared.infrastructure.logging.JsonFormatter"}},
+    "handlers": {
+        "stdout": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "filters": ["request_id"],
+            "formatter": "json",
+        }
+    },
+    "root": {"handlers": ["stdout"], "level": "INFO"},
 }
