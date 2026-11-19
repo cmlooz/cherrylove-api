@@ -7,11 +7,15 @@ import os
 for _name, _value in {
     "DJANGO_SECRET_KEY": "local-only-not-a-secret-local-only-not-a-secret-0001",
     "DJANGO_ALLOWED_HOSTS": "localhost,127.0.0.1",
+    "WEB_ORIGIN": "http://localhost:5173",
+    "AUDIT_HMAC_KEY": "local-only-audit-hmac-not-a-secret-0001",
+    "KEK": "bG9jYWwtb25seS1rZWstbm90LWEtc2VjcmV0LTAwMDE=",  # 32 bytes, local data only
     "DB_NAME": "cherrylove",
     "DB_USER": "cherrylove_app",
     "DB_PASSWORD": "local-app",
     "DB_MAINTENANCE_USER": "cherrylove_maintenance",
     "DB_MAINTENANCE_PASSWORD": "local-maintenance",
+    "REDIS_URL": "redis://127.0.0.1:6379/0",
     "DB_HOST": "127.0.0.1",
     "DB_PORT": "5432",
 }.items():

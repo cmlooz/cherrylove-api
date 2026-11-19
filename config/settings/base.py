@@ -16,23 +16,46 @@ SECRET_KEY = env.required("DJANGO_SECRET_KEY")
 DEBUG = False
 ALLOWED_HOSTS = env.csv("DJANGO_ALLOWED_HOSTS")
 
+# The only origin allowed by CORS, with credentials (ADR-004 §2).
+WEB_ORIGIN = env.required("WEB_ORIGIN")
+SECURE_REFERRER_POLICY = "no-referrer"
+
+# HMAC key for failed-login email fingerprints (ADR-008 §2): its own key, never SECRET_KEY or the KEK.
+AUDIT_HMAC_KEY = env.required("AUDIT_HMAC_KEY")
+
+# Key-encryption key, base64 of 32 bytes (ADR-009 §1): env or secret manager only, never in the database.
+KEK = env.required("KEK")
+
+# Cache and throttles (ADR-011).
+REDIS_URL = env.required("REDIS_URL")
+
 INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
+    "django_tasks",
+    "django_tasks_db",
     "cherrylove.shared.apps.SharedConfig",
+    "cherrylove.audit.apps.AuditConfig",
 ]
 
 # ADR-002 §1: migrations live in each module's infrastructure layer.
-MIGRATION_MODULES = {"shared": "cherrylove.shared.infrastructure.migrations"}
+MIGRATION_MODULES = {
+    "shared": "cherrylove.shared.infrastructure.migrations",
+    "audit": "cherrylove.audit.infrastructure.migrations",
+}
 
 MIDDLEWARE = [
+    "cherrylove.shared.interfaces.http.middleware.request_id.RequestIdMiddleware",
+    "cherrylove.shared.interfaces.http.middleware.cors.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "cherrylove.shared.interfaces.http.middleware.security_headers.SecurityHeadersMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 ROOT_URLCONF = "config.urls"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 WSGI_APPLICATION = "config.wsgi.application"
 APPEND_SLASH = False
 
@@ -69,6 +92,7 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_PERMISSION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "cherrylove.shared.interfaces.http.problem_details.exception_handler",
 }
 
 # Generated schema must match contract/openapi.v1.yaml (ADR-003 §2, DEC-048).
@@ -86,4 +110,29 @@ SPECTACULAR_SETTINGS: dict[str, object] = {
         "drf_spectacular.hooks.postprocess_schema_enums",
         "cherrylove.shared.interfaces.http.openapi.enforce_operation_ids",
     ],
+}
+
+# JSON lines to stdout with the request ID (ADR-008 §7, REQ-N-QA-01). Never content.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {"request_id": {"()": "cherrylove.shared.infrastructure.logging.RequestIdFilter"}},
+    "formatters": {"json": {"()": "cherrylove.shared.infrastructure.logging.JsonFormatter"}},
+    "handlers": {
+        "stdout": {
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "filters": ["request_id"],
+            "formatter": "json",
+        }
+    },
+    "root": {"handlers": ["stdout"], "level": "INFO"},
+}
+
+# Jobs on PostgreSQL, two queues and two workers (ADR-013 §1): Redis is not a broker.
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+        "QUEUES": ["default", "media"],
+    }
 }
