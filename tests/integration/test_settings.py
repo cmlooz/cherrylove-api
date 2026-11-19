@@ -23,6 +23,7 @@ DUMMY_PRODUCTION_ENV = {
     "WEB_ORIGIN": "https://app.example.com",
     "AUDIT_HMAC_KEY": "dummy-audit-hmac-key-for-check-deploy",
     "KEK": "ZHVtbXkta2VrLWZvci1jaGVjay1kZXBsb3ktMDAwMDE=",
+    "REDIS_URL": "redis://redis.invalid:6379/0",
     "DB_NAME": "cherrylove",
     "DB_USER": "app",
     "DB_PASSWORD": "dummy",

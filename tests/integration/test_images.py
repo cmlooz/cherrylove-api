@@ -27,6 +27,7 @@ RUNTIME_ENV = {
     "WEB_ORIGIN": "http://localhost:5173",
     "AUDIT_HMAC_KEY": "ci-images-audit-hmac-throwaway",
     "KEK": "Y2ktaW1hZ2VzLWtlay10aHJvd2F3YXktMDAwMDAwMDE=",
+    "REDIS_URL": "redis://127.0.0.1:6379/0",
     "DB_NAME": "cherrylove",
     "DB_HOST": "127.0.0.1",
     "DB_PORT": "5432",
