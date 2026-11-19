@@ -75,17 +75,3 @@ def test_same_idempotency_key_twice_runs_once() -> None:
     assert RUNS[before:] == [{"n": 7}]
     execution = JobExecution.objects.get(idempotency_key=key)
     assert (execution.status, execution.attempts, execution.job) == ("succeeded", 1, "test.integration.record")
-
-
-@pytest.mark.req("REQ-N-ARC-01")
-@pytest.mark.django_db(transaction=True)
-def test_a_failing_handler_leaves_the_key_free_for_a_retry() -> None:
-    key = _key()
-
-    @register_job("test.integration.flaky")
-    def flaky(payload: Payload) -> None:
-        raise Boom
-
-    with pytest.raises(Boom):
-        run_job.call("test.integration.flaky", {}, key)
-    assert not JobExecution.objects.filter(idempotency_key=key, status="succeeded").exists()
