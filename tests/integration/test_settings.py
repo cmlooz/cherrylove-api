@@ -22,6 +22,7 @@ DUMMY_PRODUCTION_ENV = {
     "DJANGO_ALLOWED_HOSTS": "api.example.com",
     "WEB_ORIGIN": "https://app.example.com",
     "AUDIT_HMAC_KEY": "dummy-audit-hmac-key-for-check-deploy",
+    "KEK": "ZHVtbXkta2VrLWZvci1jaGVjay1kZXBsb3ktMDAwMDE=",
     "DB_NAME": "cherrylove",
     "DB_USER": "app",
     "DB_PASSWORD": "dummy",
@@ -52,7 +53,8 @@ def test_production_settings_pass_check_deploy() -> None:
 
 @pytest.mark.req("REQ-N-ARC-01")
 @pytest.mark.parametrize(
-    "missing", ["DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DB_PASSWORD", "DB_MAINTENANCE_PASSWORD", "AUDIT_HMAC_KEY"]
+    "missing",
+    ["DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DB_PASSWORD", "DB_MAINTENANCE_PASSWORD", "AUDIT_HMAC_KEY", "KEK"],
 )
 def test_production_settings_read_only_env_vars(missing: str) -> None:
     env = {k: v for k, v in DUMMY_PRODUCTION_ENV.items() if k != missing}
