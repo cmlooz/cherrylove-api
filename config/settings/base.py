@@ -16,6 +16,10 @@ SECRET_KEY = env.required("DJANGO_SECRET_KEY")
 DEBUG = False
 ALLOWED_HOSTS = env.csv("DJANGO_ALLOWED_HOSTS")
 
+# The only origin allowed by CORS, with credentials (ADR-004 §2).
+WEB_ORIGIN = env.required("WEB_ORIGIN")
+SECURE_REFERRER_POLICY = "no-referrer"
+
 INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
@@ -27,7 +31,9 @@ MIGRATION_MODULES = {"shared": "cherrylove.shared.infrastructure.migrations"}
 
 MIDDLEWARE = [
     "cherrylove.shared.interfaces.http.middleware.request_id.RequestIdMiddleware",
+    "cherrylove.shared.interfaces.http.middleware.cors.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "cherrylove.shared.interfaces.http.middleware.security_headers.SecurityHeadersMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",

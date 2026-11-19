@@ -20,6 +20,7 @@ DUMMY_PRODUCTION_ENV = {
     "DJANGO_SETTINGS_MODULE": "config.settings.production",
     "DJANGO_SECRET_KEY": "dummy-check-deploy-value-0123456789-abcdefghijklmnopqrstuvwxyz",
     "DJANGO_ALLOWED_HOSTS": "api.example.com",
+    "WEB_ORIGIN": "https://app.example.com",
     "DB_NAME": "cherrylove",
     "DB_USER": "app",
     "DB_PASSWORD": "dummy",
