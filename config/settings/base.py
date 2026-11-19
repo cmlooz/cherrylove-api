@@ -24,10 +24,14 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
     "cherrylove.shared.apps.SharedConfig",
+    "cherrylove.audit.apps.AuditConfig",
 ]
 
 # ADR-002 §1: migrations live in each module's infrastructure layer.
-MIGRATION_MODULES = {"shared": "cherrylove.shared.infrastructure.migrations"}
+MIGRATION_MODULES = {
+    "shared": "cherrylove.shared.infrastructure.migrations",
+    "audit": "cherrylove.audit.infrastructure.migrations",
+}
 
 MIDDLEWARE = [
     "cherrylove.shared.interfaces.http.middleware.request_id.RequestIdMiddleware",
