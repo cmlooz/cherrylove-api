@@ -26,6 +26,7 @@ RUNTIME_ENV = {
     "DJANGO_ALLOWED_HOSTS": "localhost,127.0.0.1",
     "WEB_ORIGIN": "http://localhost:5173",
     "AUDIT_HMAC_KEY": "ci-images-audit-hmac-throwaway",
+    "KEK": "Y2ktaW1hZ2VzLWtlay10aHJvd2F3YXktMDAwMDAwMDE=",
     "DB_NAME": "cherrylove",
     "DB_HOST": "127.0.0.1",
     "DB_PORT": "5432",

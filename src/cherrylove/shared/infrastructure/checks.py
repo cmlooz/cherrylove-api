@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Any
 
 from django.conf import settings
@@ -19,3 +21,15 @@ def audit_hmac_key_is_its_own(app_configs: Any = None, **kwargs: Any) -> list[Ch
         for name, value in others.items()
         if value and value == key
     ]
+
+
+@register()
+def kek_is_256_bits(app_configs: Any = None, **kwargs: Any) -> list[CheckMessage]:
+    value = getattr(settings, "KEK", "")
+    try:
+        decoded = base64.b64decode(value, validate=True)
+    except binascii.Error, ValueError:
+        decoded = b""
+    if len(decoded) != 32:
+        return [Error("KEK must be the base64 encoding of exactly 32 bytes (ADR-009 §1).", id="cherrylove.E003")]
+    return []
