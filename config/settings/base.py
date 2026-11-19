@@ -32,6 +32,8 @@ REDIS_URL = env.required("REDIS_URL")
 INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
+    "django_tasks",
+    "django_tasks_db",
     "cherrylove.shared.apps.SharedConfig",
     "cherrylove.audit.apps.AuditConfig",
 ]
@@ -53,6 +55,7 @@ MIDDLEWARE = [
 ]
 
 ROOT_URLCONF = "config.urls"
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 WSGI_APPLICATION = "config.wsgi.application"
 APPEND_SLASH = False
 
@@ -124,4 +127,12 @@ LOGGING = {
         }
     },
     "root": {"handlers": ["stdout"], "level": "INFO"},
+}
+
+# Jobs on PostgreSQL, two queues and two workers (ADR-013 §1): Redis is not a broker.
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
+        "QUEUES": ["default", "media"],
+    }
 }
