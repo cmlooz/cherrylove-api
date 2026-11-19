@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Iterator
 from typing import Any
@@ -40,10 +41,12 @@ def probe() -> Iterator[str]:
 
 
 def _events(entity_id: uuid.UUID) -> list[tuple[Any, ...]]:
-    return _rows(
+    rows = _rows(
         "SELECT action, outcome, actor_type, request_id, changes FROM audit_event WHERE entity_id = %s",
         [entity_id],
     )
+    # Django's psycopg backend returns jsonb as text from raw cursors (JSONField parses it).
+    return [(*row[:4], json.loads(row[4])) for row in rows]
 
 
 @pytest.mark.req("REQ-F-LOG-01")
