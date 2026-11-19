@@ -17,6 +17,7 @@ dependencies = [
 dev = [
   "django-stubs==6.1.2",
   "djangorestframework-stubs==3.18.2",
+  "hypothesis==6.170.15",
   "import-linter==2.16",
   "mypy==2.4.1",
   "pip-audit==2.10.1",
@@ -50,6 +51,7 @@ select = ["E", "W", "F", "I", "B", "UP", "S", "N", "SIM", "RUF", "DJ", "PT", "TC
 ignore = [
   "PLR2004",  # magic values are expected in test assertions and HTTP statuses
   "TC001", "TC002", "TC003",  # runtime imports kept simple; `from __future__ import annotations` everywhere
+  "N818",  # domain errors are named after their contract code (NotFound ↔ not_found, ADR-010 §3)
 ]
 
 [tool.ruff.lint.per-file-ignores]
