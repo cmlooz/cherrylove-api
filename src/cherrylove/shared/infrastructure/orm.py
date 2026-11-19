@@ -10,6 +10,7 @@ class JobExecution(models.Model):
 
     class Status(models.TextChoices):
         RUNNING = "running"
+        RETRYING = "retrying"
         SUCCEEDED = "succeeded"
         FAILED = "failed"
 
