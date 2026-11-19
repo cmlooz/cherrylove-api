@@ -15,6 +15,7 @@ for _name, _value in {
     "DB_PASSWORD": "local-app",
     "DB_MAINTENANCE_USER": "cherrylove_maintenance",
     "DB_MAINTENANCE_PASSWORD": "local-maintenance",
+    "REDIS_URL": "redis://127.0.0.1:6379/0",
     "DB_HOST": "127.0.0.1",
     "DB_PORT": "5432",
 }.items():

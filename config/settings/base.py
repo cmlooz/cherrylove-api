@@ -26,6 +26,9 @@ AUDIT_HMAC_KEY = env.required("AUDIT_HMAC_KEY")
 # Key-encryption key, base64 of 32 bytes (ADR-009 §1): env or secret manager only, never in the database.
 KEK = env.required("KEK")
 
+# Cache and throttles (ADR-011).
+REDIS_URL = env.required("REDIS_URL")
+
 INSTALLED_APPS = [
     "rest_framework",
     "drf_spectacular",
