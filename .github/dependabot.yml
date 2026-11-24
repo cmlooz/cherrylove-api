@@ -10,6 +10,10 @@ updates:
     groups:
       python:
         patterns: ["*"]
+    # Django stays on the 5.2 LTS line until the ecosystem declares 6.x support (ADR-016 Decision 1).
+    ignore:
+      - dependency-name: django
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
