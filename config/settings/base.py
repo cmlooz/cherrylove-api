@@ -32,6 +32,7 @@ KEK = env.required("KEK")
 
 # Cache and throttles (ADR-011).
 REDIS_URL = env.required("REDIS_URL")
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": REDIS_URL}}
 
 # Outgoing email over SMTP (Mailpit locally, REQ-N-OPS-01).
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
@@ -118,6 +119,11 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_PERMISSION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # JSON only, as the contract (API-001); no browsable API.
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # Scoped throttles on Redis (ADR-004 §4).
+    "DEFAULT_THROTTLE_RATES": {"invite": "10/hour"},
     "EXCEPTION_HANDLER": "cherrylove.shared.interfaces.http.problem_details.exception_handler",
 }
 
@@ -135,6 +141,7 @@ SPECTACULAR_SETTINGS: dict[str, object] = {
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
         "cherrylove.shared.interfaces.http.openapi.enforce_operation_ids",
+        "cherrylove.shared.interfaces.http.contract.include_contract_components",
     ],
 }
 

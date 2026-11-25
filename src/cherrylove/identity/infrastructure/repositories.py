@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
-from datetime import datetime
+from datetime import date, datetime
 
+from cherrylove.identity.application.ports import InviteContext, NewPartner
 from cherrylove.identity.domain.invite import InviteSnapshot, Slot
-from cherrylove.identity.infrastructure.orm import Couple, CoupleMembership, Invite
-from cherrylove.shared.domain.ids import CoupleId
+from cherrylove.identity.infrastructure.orm import Couple, CoupleMembership, Invite, User
+from cherrylove.shared.domain.ids import CoupleId, UserId
 
 
 class DjangoMembershipQuery:
@@ -47,3 +48,36 @@ class DjangoInviteRepository:
 def _snapshot(row: Invite) -> InviteSnapshot:
     slot: Slot = 1 if row.slot == 1 else 2
     return InviteSnapshot(row.id, CoupleId(row.couple_id), slot, row.email, row.status, row.expires_at)  # type: ignore[arg-type]
+
+
+class DjangoInviteLookup:
+    def by_token_hash(self, token_hash: bytes) -> InviteContext | None:
+        row = Invite.objects.select_related("couple").filter(token_hash=token_hash).first()
+        if row is None:
+            return None
+        seat_taken = CoupleMembership.objects.filter(couple_id=row.couple_id, slot=row.slot).exists()
+        return InviteContext(
+            invite=_snapshot(row),
+            couple_archived=row.couple.status == Couple.Status.ARCHIVED,
+            seat_taken=seat_taken,
+            relationship_start=row.couple.relationship_start,
+        )
+
+
+class DjangoPartnerRepository:
+    def add(self, user_id: UserId, partner: NewPartner, couple_id: CoupleId, slot: Slot) -> None:
+        user = User(id=user_id.value, email=partner.email, name=partner.name, birth_date=partner.birth_date)
+        user.language = partner.language
+        user.set_password(partner.password)  # Argon2 (ADR-004 §4)
+        user.save(force_insert=True)
+        CoupleMembership.objects.create(couple_id=couple_id.value, user_id=user_id.value, slot=slot)
+
+    def accept_invite(self, invite_id: uuid.UUID, accepted_at: datetime) -> None:
+        Invite.objects.filter(id=invite_id, status=Invite.Status.PENDING).update(
+            status=Invite.Status.ACCEPTED, accepted_at=accepted_at
+        )
+
+    def set_relationship_start(self, couple_id: CoupleId, relationship_start: date) -> None:
+        Couple.objects.filter(id=couple_id.value, relationship_start__isnull=True).update(
+            relationship_start=relationship_start
+        )

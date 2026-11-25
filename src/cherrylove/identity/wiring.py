@@ -7,14 +7,18 @@ from django.conf import settings
 from cherrylove.audit.application.public import audit_log
 from cherrylove.identity.application.commands.create_couple import CreateCouple
 from cherrylove.identity.application.commands.invites import IssueInviteToken
+from cherrylove.identity.application.commands.onboarding import AcceptInvite, GetInvite
 from cherrylove.identity.application.commands.send_invite_email import SendInviteEmail
+from cherrylove.identity.infrastructure.adapters.jwt_tokens import JwtTokenIssuer
 from cherrylove.identity.infrastructure.adapters.mailer import DjangoInviteMailer
 from cherrylove.identity.infrastructure.adapters.provisioning import CoupleDataKeyProvisioner, SyncStateViaFacade
 from cherrylove.identity.infrastructure.adapters.tokens import SecretsTokenGenerator
 from cherrylove.identity.infrastructure.repositories import (
     DjangoCoupleRepository,
+    DjangoInviteLookup,
     DjangoInviteRepository,
     DjangoMembershipQuery,
+    DjangoPartnerRepository,
 )
 from cherrylove.shared.infrastructure.clock import SystemClock, Uuid7Generator
 from cherrylove.shared.infrastructure.django_job_queue import DjangoJobQueue
@@ -43,4 +47,20 @@ def send_invite_email() -> SendInviteEmail:
         mailer=DjangoInviteMailer(),
         clock=clock,
         link_template=settings.INVITE_LINK_TEMPLATE,
+    )
+
+
+def get_invite() -> GetInvite:
+    return GetInvite(DjangoInviteLookup(), SystemClock())
+
+
+def accept_invite() -> AcceptInvite:
+    return AcceptInvite(
+        uow=DjangoUnitOfWork(),
+        clock=SystemClock(),
+        ids=Uuid7Generator(),
+        lookup=DjangoInviteLookup(),
+        partners=DjangoPartnerRepository(),
+        sessions=JwtTokenIssuer(),
+        audit=audit_log(),
     )
