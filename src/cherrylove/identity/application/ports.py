@@ -7,7 +7,7 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Protocol
 
-from cherrylove.identity.domain.invite import Slot
+from cherrylove.identity.domain.invite import InviteSnapshot, Slot
 from cherrylove.shared.domain.ids import CoupleId
 
 
@@ -26,6 +26,22 @@ class InviteRepository(Protocol):
         self, invite_id: uuid.UUID, couple_id: CoupleId, slot: Slot, email: str, expires_at: datetime
     ) -> None:
         """A pending invite without a token yet: the send-email job issues it (ADR-004 §4)."""
+        ...
+
+    def get(self, invite_id: uuid.UUID) -> InviteSnapshot | None: ...
+
+    def pending_for_seat(self, couple_id: CoupleId, slot: Slot) -> InviteSnapshot | None: ...
+
+    def revoke(self, invite_id: uuid.UUID) -> None: ...
+
+    def set_token(self, invite_id: uuid.UUID, token_hash: bytes, sent_at: datetime) -> None:
+        """Only the SHA-256 of the token is stored (ADR-004 §4)."""
+        ...
+
+
+class TokenGenerator(Protocol):
+    def new(self) -> str:
+        """A URL-safe token from 32 random bytes."""
         ...
 
 
