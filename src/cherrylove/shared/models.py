@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from cherrylove.shared.infrastructure.orm import JobExecution
+from cherrylove.shared.infrastructure.orm import CoupleDataKey, JobExecution
 
-__all__ = ["JobExecution"]
+__all__ = ["CoupleDataKey", "JobExecution"]
