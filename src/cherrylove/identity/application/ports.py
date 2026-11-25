@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Protocol
+from typing import Literal, Protocol
 
 from cherrylove.identity.domain.invite import InviteSnapshot, Slot
 from cherrylove.shared.domain.ids import CoupleId, UserId
@@ -119,7 +119,21 @@ class CredentialCheck(Protocol):
         ...
 
 
+@dataclass(frozen=True, slots=True)
+class RefreshCheck:
+    """`reused`: a well-signed refresh that was already rotated or revoked, i.e. a stolen copy (ADR-004 §3)."""
+
+    kind: Literal["valid", "reused", "invalid"]
+    user_id: UserId | None = None
+
+
 class SessionStore(Protocol):
+    def check(self, refresh: str) -> RefreshCheck: ...
+
+    def revoke_all(self, user_id: UserId) -> int:
+        """Blacklist every outstanding refresh of the user; how many were still live."""
+        ...
+
     def rotate(self, refresh: str) -> tuple[UserId, Session]:
         """Blacklist `refresh` and return a new pair; raises NotAuthenticated when it is not usable."""
         ...

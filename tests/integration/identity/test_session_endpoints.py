@@ -107,3 +107,20 @@ def test_logout_blacklists_the_refresh_and_clears_the_web_cookie(client: Client)
     after = client.post("/api/v1/auth/refresh", content_type="application/json", headers=WEB)
     assert after.status_code == 401
     assert any(e["entity_id"] == user.id for e in _audit("auth.logout"))
+
+
+@pytest.mark.req("REQ-F-AUTH-07")
+@pytest.mark.django_db(transaction=True)
+def test_replaying_a_rotated_refresh_revokes_every_session_of_the_user(client: Client) -> None:
+    user = _partner()
+    stolen = _login(client, user.email, PASSWORD, "mobile").json()["refresh"]
+    other_device = _login(client, user.email, PASSWORD, "mobile").json()["refresh"]
+    rotated = client.post("/api/v1/auth/refresh", {"refresh": stolen}, content_type="application/json").json()
+
+    replay = client.post("/api/v1/auth/refresh", {"refresh": stolen}, content_type="application/json")
+    assert (replay.status_code, replay.json()["code"]) == (401, "not_authenticated")
+    for refresh in (rotated["refresh"], other_device):
+        dead = client.post("/api/v1/auth/refresh", {"refresh": refresh}, content_type="application/json")
+        assert dead.status_code == 401, "every session of the user is revoked"
+    [event] = [e for e in _audit("auth.refresh_reused") if e["entity_id"] == user.id]
+    assert event["changes"] == {"revoked_sessions": {"from": None, "to": 2}}

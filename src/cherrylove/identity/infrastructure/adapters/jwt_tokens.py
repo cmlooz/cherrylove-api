@@ -13,9 +13,10 @@ from typing import Any
 
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
-from cherrylove.identity.application.ports import Session
+from cherrylove.identity.application.ports import RefreshCheck, Session
 from cherrylove.identity.infrastructure.orm import Couple, User
 from cherrylove.shared.domain.errors import NotAuthenticated
 from cherrylove.shared.domain.ids import UserId
@@ -69,6 +70,22 @@ def _encoded(refresh: str) -> Any:
 
 class JwtSessionStore:
     """Rotation and revocation on SimpleJWT's outstanding/blacklisted tables; library errors become port errors."""
+
+    def check(self, refresh: str) -> RefreshCheck:
+        try:
+            token = PartnerRefreshToken(_encoded(refresh))
+        except TokenError:
+            return RefreshCheck("invalid")
+        user_id = UserId(uuid.UUID(str(token["sub"])))
+        if BlacklistedToken.objects.filter(token__jti=token["jti"]).exists():
+            return RefreshCheck("reused", user_id)
+        return RefreshCheck("valid", user_id)
+
+    def revoke_all(self, user_id: UserId) -> int:
+        live = OutstandingToken.objects.filter(user_id=user_id.value, blacklistedtoken__isnull=True)
+        tokens = list(live)
+        BlacklistedToken.objects.bulk_create([BlacklistedToken(token=token) for token in tokens])
+        return len(tokens)
 
     def rotate(self, refresh: str) -> tuple[UserId, Session]:
         try:

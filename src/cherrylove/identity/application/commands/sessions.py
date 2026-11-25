@@ -15,6 +15,7 @@ from cherrylove.identity.domain.invite import normalize_email
 from cherrylove.shared.application.audit_log import AuditEvent, AuditLog, email_fingerprint
 from cherrylove.shared.application.unit_of_work import UnitOfWork
 from cherrylove.shared.domain.errors import NotAuthenticated
+from cherrylove.shared.domain.ids import UserId
 
 
 @dataclass(frozen=True, slots=True)
@@ -88,6 +89,12 @@ class RefreshSession:
     def execute(self, refresh: str | None, info: RequestInfo) -> Session:
         if not refresh:
             raise NotAuthenticated("no refresh token")
+        check = self.store.check(refresh)
+        if check.kind == "reused" and check.user_id is not None:
+            self._kill_all_sessions(check.user_id, info)
+            raise NotAuthenticated("refresh token reused")
+        if check.kind != "valid":
+            raise NotAuthenticated("unusable refresh token")
         with self.uow.atomic():
             user_id, session = self.store.rotate(refresh)
             self.audit.record(
@@ -101,6 +108,23 @@ class RefreshSession:
                 )
             )
         return session
+
+    def _kill_all_sessions(self, user_id: UserId, info: RequestInfo) -> None:
+        """Theft response: committed before the 401 so the attacker's copy dies too (ADR-004 §3)."""
+        with self.uow.atomic():
+            revoked = self.store.revoke_all(user_id)
+            self.audit.record(
+                AuditEvent(
+                    action="auth.refresh_reused",
+                    outcome="rejected",
+                    actor_type="partner",
+                    entity_type="user",
+                    entity_id=user_id.value,
+                    changes={"revoked_sessions": {"from": None, "to": revoked}},
+                    ip=info.ip,
+                    device=_device(info),
+                )
+            )
 
 
 @dataclass(frozen=True, slots=True)
