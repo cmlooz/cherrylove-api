@@ -9,3 +9,4 @@ class IdentityConfig(AppConfig):
 
     def ready(self) -> None:
         from cherrylove.identity.interfaces import jobs  # noqa: F401, PLC0415 - registers job handlers
+        from cherrylove.identity.interfaces.http import authentication  # noqa: F401, PLC0415 - OpenAPI scheme

@@ -30,3 +30,17 @@ class CoupleFull(DomainError):
 class CoupleArchived(DomainError):
     code = "couple_archived"
     status = 409
+
+
+class InvalidCredentials(DomainError):
+    """Wrong email or password: the same answer for an unknown email (ADR-004 §4)."""
+
+    code = "invalid_credentials"
+    status = 401
+
+
+class ClientHeaderRequired(DomainError):
+    """A cookie-based call without `X-CherryLove-Client: web` (CSRF defense, ADR-004 §2)."""
+
+    code = "client_header_required"
+    status = 403
