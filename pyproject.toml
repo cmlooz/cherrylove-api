@@ -5,12 +5,14 @@ description = "CherryLove API, Django Admin and worker"
 readme = "README.md"
 requires-python = "==3.14.10"
 dependencies = [
-  "boto3==1.44.6",
+  "argon2-cffi==25.1.0",
+  "boto3==1.44.11",
   "cryptography==50.0.2",
   "django==5.2.19",
   "django-tasks==0.12.0",
   "django-tasks-db[compat]==0.13.0",
   "djangorestframework==3.18.3",
+  "djangorestframework-simplejwt==5.5.1",
   "drf-spectacular==0.30.0",
   "gunicorn==27.0.1",
   "psycopg[binary]==3.3.9",
@@ -21,15 +23,15 @@ dependencies = [
 dev = [
   "django-stubs==6.1.2",
   "djangorestframework-stubs==3.18.2",
-  "hypothesis==6.170.15",
+  "hypothesis==6.170.17",
   "import-linter==2.16",
   "mypy==2.4.1",
   "pip-audit==2.10.1",
   "pytest==9.2.0",
   "pytest-cov==7.1.0",
   "pytest-django==4.14.0",
-  "pyyaml==6.0.3",
-  "ruff==0.17.5",
+  "pyyaml==6.0.4",
+  "ruff==0.17.6",
 ]
 
 [tool.uv]
@@ -60,9 +62,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # PT012: rollback tests need several statements inside pytest.raises on purpose.
-"tests/**" = ["S101", "S310", "S603", "S607", "S608", "PLR0913", "PT012"]
+"tests/**" = ["S101", "S105", "S106", "S107", "S310", "S603", "S607", "S608", "PLR0913", "PT012"]
 # Django migration idioms: class-level lists; SQL built from module constants, never from input.
-"**/migrations/*" = ["RUF012", "S608"]
+"**/migrations/*" = ["RUF012", "S608", "E501"]
 "scripts/**" = ["S603", "S607"]
 "tests/integration/test_settings.py" = ["S105"]
 

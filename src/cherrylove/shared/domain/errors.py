@@ -34,6 +34,13 @@ class FieldError(DomainError):
         self.field_code = field_code
 
 
+class NotAuthenticated(DomainError):
+    """Missing, invalid, expired or revoked credentials (ADR-004, ADR-010 §2)."""
+
+    code = "not_authenticated"
+    status = 401
+
+
 class NotFound(DomainError):
     """Missing **or not visible** to the actor: one code path, so existence never leaks (ADR-005 §4)."""
 
@@ -44,6 +51,13 @@ class NotFound(DomainError):
 class NotAuthor(DomainError):
     code = "not_author"
     status = 403
+
+
+class ServiceUnavailable(DomainError):
+    """A dependency is down and failing open would be unsafe (ADR-011 §2)."""
+
+    code = "service_unavailable"
+    status = 503
 
 
 class EntityDeleted(DomainError):

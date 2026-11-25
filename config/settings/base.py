@@ -1,11 +1,12 @@
 """Settings shared by every environment. Values come only from environment variables (DEC-039).
 
-INSTALLED_APPS has no `django.contrib.auth` / `admin` until F2.1 (IMPL-API-001 F0), so no auth table
-exists before the custom user model.
+`django.contrib.auth` arrives with the custom user model (F2.1), so the first auth migration already uses
+`identity.User`; the Django Admin arrives in F9.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from config.settings import env
@@ -23,25 +24,54 @@ SECURE_REFERRER_POLICY = "no-referrer"
 # HMAC key for failed-login email fingerprints (ADR-008 §2): its own key, never SECRET_KEY or the KEK.
 AUDIT_HMAC_KEY = env.required("AUDIT_HMAC_KEY")
 
+# JWT signing key (ADR-004 §1): HS256 with its own key, never SECRET_KEY.
+JWT_SIGNING_KEY = env.required("JWT_SIGNING_KEY")
+
 # Key-encryption key, base64 of 32 bytes (ADR-009 §1): env or secret manager only, never in the database.
 KEK = env.required("KEK")
 
 # Cache and throttles (ADR-011).
 REDIS_URL = env.required("REDIS_URL")
+CACHES = {"default": {"BACKEND": "django.core.cache.backends.redis.RedisCache", "LOCATION": REDIS_URL}}
+
+# Outgoing email over SMTP (Mailpit locally, REQ-N-OPS-01).
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = env.required("EMAIL_HOST")
+EMAIL_PORT = env.integer("EMAIL_PORT")
+DEFAULT_FROM_EMAIL = env.required("DEFAULT_FROM_EMAIL")
+# Where an invite link opens; the route belongs to the web app (plan G). `{token}` is replaced.
+INVITE_LINK_TEMPLATE = env.required("INVITE_LINK_TEMPLATE")
+# Password recovery link (web route, plan G); `{uid}` and `{token}` are replaced. Tokens live 30 min (ADR-004 §4).
+RECOVERY_LINK_TEMPLATE = env.required("RECOVERY_LINK_TEMPLATE")
+PASSWORD_RESET_TIMEOUT = 30 * 60
 
 INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
     "django_tasks",
     "django_tasks_db",
     "cherrylove.shared.apps.SharedConfig",
     "cherrylove.audit.apps.AuditConfig",
+    "cherrylove.identity.apps.IdentityConfig",
+    "cherrylove.sync.apps.SyncConfig",
+]
+
+# Custom user from the first identity migration (ADR-004 §4, DATA-001 §3); Argon2 first (argon2-cffi).
+AUTH_USER_MODEL = "identity.User"
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.Argon2PasswordHasher"]
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
 ]
 
 # ADR-002 §1: migrations live in each module's infrastructure layer.
 MIGRATION_MODULES = {
     "shared": "cherrylove.shared.infrastructure.migrations",
     "audit": "cherrylove.audit.infrastructure.migrations",
+    "identity": "cherrylove.identity.infrastructure.migrations",
+    "sync": "cherrylove.sync.infrastructure.migrations",
 }
 
 MIDDLEWARE = [
@@ -92,6 +122,11 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_PERMISSION_CLASSES": [],
     "UNAUTHENTICATED_USER": None,
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    # JSON only, as the contract (API-001); no browsable API.
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    # Scoped throttles on Redis (ADR-004 §4).
+    "DEFAULT_THROTTLE_RATES": {"invite": "10/hour", "login": "5/min", "recovery": "3/hour"},
     "EXCEPTION_HANDLER": "cherrylove.shared.interfaces.http.problem_details.exception_handler",
 }
 
@@ -109,6 +144,7 @@ SPECTACULAR_SETTINGS: dict[str, object] = {
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
         "cherrylove.shared.interfaces.http.openapi.enforce_operation_ids",
+        "cherrylove.shared.interfaces.http.contract.include_contract_components",
     ],
 }
 
@@ -135,4 +171,18 @@ TASKS = {
         "BACKEND": "django_tasks_db.DatabaseBackend",
         "QUEUES": ["default", "media"],
     }
+}
+
+# Sessions (ADR-004 §1-3): access 10 min, refresh 30 days rotating and blacklisted after use.
+SIMPLE_JWT = {
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": JWT_SIGNING_KEY,
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=10),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "sub",
+    "AUTH_TOKEN_CLASSES": ("cherrylove.identity.infrastructure.adapters.jwt_tokens.MinimalAccessToken",),
 }

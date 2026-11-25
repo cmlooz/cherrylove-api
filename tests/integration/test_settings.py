@@ -22,8 +22,14 @@ DUMMY_PRODUCTION_ENV = {
     "DJANGO_ALLOWED_HOSTS": "api.example.com",
     "WEB_ORIGIN": "https://app.example.com",
     "AUDIT_HMAC_KEY": "dummy-audit-hmac-key-for-check-deploy",
+    "JWT_SIGNING_KEY": "dummy-jwt-signing-key-for-check-deploy",
     "KEK": "ZHVtbXkta2VrLWZvci1jaGVjay1kZXBsb3ktMDAwMDE=",
     "REDIS_URL": "redis://redis.invalid:6379/0",
+    "EMAIL_HOST": "smtp.invalid",
+    "EMAIL_PORT": "587",
+    "DEFAULT_FROM_EMAIL": "CherryLove <noreply@example.com>",
+    "INVITE_LINK_TEMPLATE": "https://app.example.com/invites/{token}",
+    "RECOVERY_LINK_TEMPLATE": "https://app.example.com/password-recovery/{uid}/{token}",
     "DB_NAME": "cherrylove",
     "DB_USER": "app",
     "DB_PASSWORD": "dummy",
@@ -55,7 +61,15 @@ def test_production_settings_pass_check_deploy() -> None:
 @pytest.mark.req("REQ-N-ARC-01")
 @pytest.mark.parametrize(
     "missing",
-    ["DJANGO_SECRET_KEY", "DJANGO_ALLOWED_HOSTS", "DB_PASSWORD", "DB_MAINTENANCE_PASSWORD", "AUDIT_HMAC_KEY", "KEK"],
+    [
+        "DJANGO_SECRET_KEY",
+        "DJANGO_ALLOWED_HOSTS",
+        "DB_PASSWORD",
+        "DB_MAINTENANCE_PASSWORD",
+        "AUDIT_HMAC_KEY",
+        "KEK",
+        "JWT_SIGNING_KEY",
+    ],
 )
 def test_production_settings_read_only_env_vars(missing: str) -> None:
     env = {k: v for k, v in DUMMY_PRODUCTION_ENV.items() if k != missing}
