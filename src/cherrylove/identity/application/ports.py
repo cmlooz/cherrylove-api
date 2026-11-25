@@ -49,3 +49,7 @@ class CoupleProvisioner(Protocol):
     """Everything another module must create together with a couple (sync_state, data key)."""
 
     def provision(self, couple_id: CoupleId) -> None: ...
+
+
+class InviteMailer(Protocol):
+    def send(self, to: str, subject: str, body: str) -> None: ...

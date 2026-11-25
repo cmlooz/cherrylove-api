@@ -29,6 +29,14 @@ KEK = env.required("KEK")
 # Cache and throttles (ADR-011).
 REDIS_URL = env.required("REDIS_URL")
 
+# Outgoing email over SMTP (Mailpit locally, REQ-N-OPS-01).
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = env.required("EMAIL_HOST")
+EMAIL_PORT = env.integer("EMAIL_PORT")
+DEFAULT_FROM_EMAIL = env.required("DEFAULT_FROM_EMAIL")
+# Where an invite link opens; the route belongs to the web app (plan G). `{token}` is replaced.
+INVITE_LINK_TEMPLATE = env.required("INVITE_LINK_TEMPLATE")
+
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
