@@ -123,7 +123,7 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     # Scoped throttles on Redis (ADR-004 §4).
-    "DEFAULT_THROTTLE_RATES": {"invite": "10/hour"},
+    "DEFAULT_THROTTLE_RATES": {"invite": "10/hour", "login": "5/min"},
     "EXCEPTION_HANDLER": "cherrylove.shared.interfaces.http.problem_details.exception_handler",
 }
 

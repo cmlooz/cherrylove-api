@@ -53,6 +53,13 @@ class NotAuthor(DomainError):
     status = 403
 
 
+class ServiceUnavailable(DomainError):
+    """A dependency is down and failing open would be unsafe (ADR-011 §2)."""
+
+    code = "service_unavailable"
+    status = 503
+
+
 class EntityDeleted(DomainError):
     code = "entity_deleted"
     status = 410
