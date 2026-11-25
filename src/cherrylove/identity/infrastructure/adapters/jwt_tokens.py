@@ -11,8 +11,9 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.exceptions import TokenBackendError, TokenError
 from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.state import token_backend
 from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
@@ -72,12 +73,16 @@ class JwtSessionStore:
     """Rotation and revocation on SimpleJWT's outstanding/blacklisted tables; library errors become port errors."""
 
     def check(self, refresh: str) -> RefreshCheck:
+        # Verify signature and expiry only: the token constructor would also refuse a blacklisted token,
+        # and that is exactly the case to tell apart (a reused copy) from a forged or expired one.
         try:
-            token = PartnerRefreshToken(_encoded(refresh))
-        except TokenError:
+            payload = token_backend.decode(_encoded(refresh), verify=True)
+        except TokenBackendError:
             return RefreshCheck("invalid")
-        user_id = UserId(uuid.UUID(str(token["sub"])))
-        if BlacklistedToken.objects.filter(token__jti=token["jti"]).exists():
+        if payload.get(api_settings.TOKEN_TYPE_CLAIM) != PartnerRefreshToken.token_type or not payload.get("jti"):
+            return RefreshCheck("invalid")
+        user_id = UserId(uuid.UUID(str(payload["sub"])))
+        if BlacklistedToken.objects.filter(token__jti=payload["jti"]).exists():
             return RefreshCheck("reused", user_id)
         return RefreshCheck("valid", user_id)
 
