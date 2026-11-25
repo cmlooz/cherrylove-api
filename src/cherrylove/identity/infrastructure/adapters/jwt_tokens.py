@@ -91,6 +91,21 @@ def _stored_session(token: OutstandingToken) -> object:
     return token_backend.decode(_encoded(token.token), verify=False).get(SESSION_CLAIM)
 
 
+def _was_rotated(jti: str, sid: object) -> bool:
+    """A blacklisted refresh is a stolen copy only if its session went on with a newer token (ADR-004 §3).
+
+    A token revoked by logout, password change or deactivation is the newest of its session: presenting it
+    again is a device that missed the news, not a theft, so it must not kill the other sessions.
+    """
+    if not sid:
+        return True  # no session to follow: treat every blacklisted copy as reuse (conservative)
+    stored = OutstandingToken.objects.filter(jti=jti).only("id", "user_id").first()
+    if stored is None or stored.user_id is None:
+        return False
+    newer = OutstandingToken.objects.filter(user_id=stored.user_id, id__gt=stored.id).only("token")
+    return any(_stored_session(token) == sid for token in newer)
+
+
 class JwtSessionStore:
     """Rotation and revocation on SimpleJWT's outstanding/blacklisted tables; library errors become port errors."""
 
@@ -105,7 +120,8 @@ class JwtSessionStore:
             return RefreshCheck("invalid")
         user_id = UserId(uuid.UUID(str(payload["sub"])))
         if BlacklistedToken.objects.filter(token__jti=payload["jti"]).exists():
-            return RefreshCheck("reused", user_id)
+            rotated = _was_rotated(str(payload["jti"]), payload.get(SESSION_CLAIM))
+            return RefreshCheck("reused" if rotated else "invalid", user_id)
         return RefreshCheck("valid", user_id)
 
     def revoke_all(self, user_id: UserId) -> int:

@@ -123,6 +123,26 @@ def test_replaying_a_rotated_refresh_revokes_every_session_of_the_user(client: C
         dead = client.post("/api/v1/auth/refresh", {"refresh": refresh}, content_type="application/json")
         assert dead.status_code == 401, "every session of the user is revoked"
     changes = [e["changes"] for e in _audit("auth.refresh_reused") if e["entity_id"] == user.id]
-    # The replay killed the 2 live sessions; each later attempt with a dead copy is reuse again (0 left).
-    assert {"revoked_sessions": {"from": None, "to": 2}} in changes
-    assert changes.count({"revoked_sessions": {"from": None, "to": 0}}) == 2
+    # Only the replayed rotated copy is reuse; the revoked newest tokens are plain 401s afterwards.
+    assert changes == [{"revoked_sessions": {"from": None, "to": 2}}]
+
+
+@pytest.mark.req("REQ-F-AUTH-07")
+@pytest.mark.django_db(transaction=True)
+def test_a_token_revoked_by_logout_is_refused_without_killing_other_sessions(client: Client) -> None:
+    user = _partner()
+    phone = _login(client, user.email, PASSWORD, "mobile").json()
+    tablet = _login(client, user.email, PASSWORD, "mobile").json()
+    client.post(
+        "/api/v1/auth/logout",
+        {"refresh": phone["refresh"]},
+        content_type="application/json",
+        headers={"Authorization": f"Bearer {phone['access']}"},
+    )
+    again = client.post("/api/v1/auth/refresh", {"refresh": phone["refresh"]}, content_type="application/json")
+    assert again.status_code == 401
+    tablet_refresh = client.post(
+        "/api/v1/auth/refresh", {"refresh": tablet["refresh"]}, content_type="application/json"
+    )
+    assert tablet_refresh.status_code == 200, "a stale logged-out device is not a theft"
+    assert not [e for e in _audit("auth.refresh_reused") if e["entity_id"] == user.id]
