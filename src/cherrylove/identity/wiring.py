@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import cache
+
 from django.conf import settings
 
 from cherrylove.audit.application.public import audit_log
@@ -15,6 +17,7 @@ from cherrylove.identity.application.commands.password_recovery import (
 )
 from cherrylove.identity.application.commands.send_invite_email import SendInviteEmail
 from cherrylove.identity.application.commands.sessions import Login, Logout, RefreshSession
+from cherrylove.identity.infrastructure.adapters.actor_resolver import CachedActorResolver
 from cherrylove.identity.infrastructure.adapters.jwt_tokens import JwtSessionStore, JwtTokenIssuer
 from cherrylove.identity.infrastructure.adapters.mailer import DjangoInviteMailer
 from cherrylove.identity.infrastructure.adapters.provisioning import CoupleDataKeyProvisioner, SyncStateViaFacade
@@ -31,6 +34,7 @@ from cherrylove.identity.infrastructure.repositories import (
 from cherrylove.shared.infrastructure.clock import SystemClock, Uuid7Generator
 from cherrylove.shared.infrastructure.django_job_queue import DjangoJobQueue
 from cherrylove.shared.infrastructure.django_unit_of_work import DjangoUnitOfWork
+from cherrylove.shared.infrastructure.redis_cache import RedisCache, redis_client
 
 
 def create_couple() -> CreateCouple:
@@ -103,3 +107,13 @@ def send_password_recovery() -> SendPasswordRecovery:
 
 def confirm_password_recovery() -> ConfirmPasswordRecovery:
     return ConfirmPasswordRecovery(DjangoUnitOfWork(), DjangoRecoveryAccounts(), JwtSessionStore(), audit_log())
+
+
+@cache
+def _cache() -> RedisCache:
+    """One client (and connection pool) per process."""
+    return RedisCache(redis_client(settings.REDIS_URL))
+
+
+def actor_resolver() -> CachedActorResolver:
+    return CachedActorResolver(_cache())

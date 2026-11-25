@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any
 
 from drf_spectacular.utils import OpenApiParameter, extend_schema
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -25,6 +24,7 @@ from cherrylove.identity.interfaces.http.sessions import (
     refresh_from,
     session_response,
 )
+from cherrylove.shared.interfaces.http.actor import IsCouplePartner
 from cherrylove.shared.interfaces.http.contract import error_headers, error_responses
 from cherrylove.shared.interfaces.http.throttling import IpAndEmailThrottle
 
@@ -94,7 +94,7 @@ class RefreshView(APIView):
 
 class LogoutView(APIView):
     authentication_classes = (PartnerJWTAuthentication,)
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (IsCouplePartner,)
 
     @extend_schema(
         operation_id="identity_delete_session",
