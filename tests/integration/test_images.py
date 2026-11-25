@@ -26,6 +26,7 @@ RUNTIME_ENV = {
     "DJANGO_ALLOWED_HOSTS": "localhost,127.0.0.1",
     "WEB_ORIGIN": "http://localhost:5173",
     "AUDIT_HMAC_KEY": "ci-images-audit-hmac-throwaway",
+    "JWT_SIGNING_KEY": "ci-images-jwt-signing-throwaway",
     "KEK": "Y2ktaW1hZ2VzLWtlay10aHJvd2F3YXktMDAwMDAwMDE=",
     "REDIS_URL": "redis://127.0.0.1:6379/0",
     "EMAIL_HOST": "127.0.0.1",

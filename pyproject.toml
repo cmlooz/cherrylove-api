@@ -12,6 +12,7 @@ dependencies = [
   "django-tasks==0.12.0",
   "django-tasks-db[compat]==0.13.0",
   "djangorestframework==3.18.3",
+  "djangorestframework-simplejwt==5.5.1",
   "drf-spectacular==0.30.0",
   "gunicorn==27.0.1",
   "psycopg[binary]==3.3.9",
@@ -61,7 +62,7 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 # PT012: rollback tests need several statements inside pytest.raises on purpose.
-"tests/**" = ["S101", "S310", "S603", "S607", "S608", "PLR0913", "PT012"]
+"tests/**" = ["S101", "S105", "S106", "S310", "S603", "S607", "S608", "PLR0913", "PT012"]
 # Django migration idioms: class-level lists; SQL built from module constants, never from input.
 "**/migrations/*" = ["RUF012", "S608", "E501"]
 "scripts/**" = ["S603", "S607"]

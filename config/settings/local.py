@@ -9,6 +9,7 @@ for _name, _value in {
     "DJANGO_ALLOWED_HOSTS": "localhost,127.0.0.1",
     "WEB_ORIGIN": "http://localhost:5173",
     "AUDIT_HMAC_KEY": "local-only-audit-hmac-not-a-secret-0001",
+    "JWT_SIGNING_KEY": "local-only-jwt-signing-not-a-secret-0001",
     "KEK": "bG9jYWwtb25seS1rZWstbm90LWEtc2VjcmV0LTAwMDE=",  # 32 bytes, local data only
     "DB_NAME": "cherrylove",
     "DB_USER": "cherrylove_app",
