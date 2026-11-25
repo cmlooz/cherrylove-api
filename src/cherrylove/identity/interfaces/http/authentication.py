@@ -26,7 +26,9 @@ class PartnerJWTAuthentication(JWTAuthentication):
         subject = validated_token.get(api_settings.USER_ID_CLAIM)
         if not subject:
             raise NotAuthenticated("the token has no subject")
-        return Partner(wiring.actor_resolver().resolve(UserId(uuid.UUID(str(subject)))))
+        actor = wiring.actor_resolver().resolve(UserId(uuid.UUID(str(subject))))
+        session = validated_token.get("sid")
+        return Partner(actor, session_id=str(session) if session else None)
 
 
 class PartnerJWTAuthenticationScheme(OpenApiAuthenticationExtension):  # type: ignore[no-untyped-call]

@@ -1,6 +1,9 @@
 """JWT sessions on SimpleJWT (ADR-004 §1-3); the library lives only here.
 
-Access tokens carry exactly `sub`, `exp`, `iat` and `jti` (no couple claim: ADR-005 resolves it server-side).
+Access tokens carry exactly `sub`, `exp`, `iat`, `jti` and `sid` (no couple claim: ADR-005 resolves it
+server-side). `sid` names the session: the `jti` of its first refresh token, kept by every rotation, so a
+password change can keep the current session and revoke the others (DEC-051).
+
 Without a type claim a 30-day refresh token would also pass as an access token, so the rule is inverted: the
 refresh token keeps its `token_type`, and access verification refuses any token that has one.
 """
@@ -42,12 +45,26 @@ def _expiry(token: AccessToken | RefreshToken) -> datetime:
     return datetime.fromtimestamp(int(token["exp"]), tz=UTC)
 
 
+SESSION_CLAIM = "sid"
+
+
+def _session(user: User, sid: str | None = None) -> Session:
+    """A refresh registered as outstanding (rotation and blacklist, ADR-004 §3) in session `sid` (new if None).
+
+    `for_user` stores the encoded token before `sid` is set, so the stored copy is replaced: revoking the other
+    sessions reads `sid` from it.
+    """
+    refresh = PartnerRefreshToken.for_user(user)
+    refresh[SESSION_CLAIM] = sid or str(refresh["jti"])
+    OutstandingToken.objects.filter(jti=refresh["jti"]).update(token=str(refresh))
+    access = refresh.access_token  # copies `sid`
+    return Session(str(access), _expiry(access), str(refresh), _expiry(refresh))
+
+
 class JwtTokenIssuer:
     def issue(self, user_id: UserId) -> Session:
-        """A new session: refresh registered as outstanding (rotation and blacklist, ADR-004 §3)."""
-        refresh = PartnerRefreshToken.for_user(User.objects.get(id=user_id.value))
-        access = refresh.access_token
-        return Session(str(access), _expiry(access), str(refresh), _expiry(refresh))
+        """A new session."""
+        return _session(User.objects.get(id=user_id.value))
 
 
 def _partner(user_id: object) -> User | None:
@@ -67,6 +84,11 @@ def _partner(user_id: object) -> User | None:
 def _encoded(refresh: str) -> Any:
     """SimpleJWT's hints say `Token | None`, but its constructor takes the encoded string (documented API)."""
     return refresh
+
+
+def _stored_session(token: OutstandingToken) -> object:
+    """`sid` of a stored refresh token; our own tokens, so the signature was checked when they were issued."""
+    return token_backend.decode(_encoded(token.token), verify=False).get(SESSION_CLAIM)
 
 
 class JwtSessionStore:
@@ -92,6 +114,12 @@ class JwtSessionStore:
         BlacklistedToken.objects.bulk_create([BlacklistedToken(token=token) for token in tokens])
         return len(tokens)
 
+    def revoke_others(self, user_id: UserId, keep_session: str) -> int:
+        live = OutstandingToken.objects.filter(user_id=user_id.value, blacklistedtoken__isnull=True)
+        others = [token for token in live if _stored_session(token) != keep_session]
+        BlacklistedToken.objects.bulk_create([BlacklistedToken(token=token) for token in others])
+        return len(others)
+
     def rotate(self, refresh: str) -> tuple[UserId, Session]:
         try:
             token = PartnerRefreshToken(_encoded(refresh))
@@ -102,7 +130,7 @@ class JwtSessionStore:
         if user is None:
             raise NotAuthenticated("the account can no longer refresh")
         token.blacklist()
-        return UserId(user.id), JwtTokenIssuer().issue(UserId(user.id))
+        return UserId(user.id), _session(user, token.get(SESSION_CLAIM))
 
     def revoke(self, refresh: str) -> UserId | None:
         try:

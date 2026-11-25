@@ -13,11 +13,7 @@ diary_upsert_note
 favorites_list_mine
 favorites_star_item
 favorites_unstar_item
-home_get_couple
 home_get_dashboard
-identity_change_password
-identity_get_me
-identity_update_me
 media_complete_upload
 media_create_signed_urls
 media_create_upload

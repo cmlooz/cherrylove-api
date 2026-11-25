@@ -47,6 +47,9 @@ class FakeStore:
         self.killed.append(user_id)
         return 3
 
+    def revoke_others(self, user_id: UserId, keep_session: str) -> int:
+        raise NotImplementedError
+
     def rotate(self, refresh: str) -> tuple[UserId, Session]:
         self.refreshed.append(refresh)
         return USER, FakeTokenIssuer().issue(USER)

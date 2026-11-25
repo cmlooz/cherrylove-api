@@ -65,3 +65,59 @@ class RecoveryConfirmSerializer(serializers.Serializer[Any]):
     uid = serializers.CharField(allow_blank=True)
     token = serializers.CharField(allow_blank=True)
     new_password = serializers.CharField(min_length=10, trim_whitespace=False)
+
+
+# drf-spectacular appends `{type: null}` to a `oneOf` of an allow_null field: the contract's `Uuid | null`.
+@extend_schema_field({"oneOf": [{"type": "string", "format": "uuid"}]})
+class NullableUuidField(serializers.UUIDField):
+    """`Uuid | null` exactly as the contract writes it."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__(allow_null=True, **kwargs)
+
+
+class PersonSummarySerializer(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    name = serializers.CharField()
+    avatar_media_id = NullableUuidField(required=False)
+
+
+class MeSerializer(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    email = serializers.EmailField()
+    name = serializers.CharField()
+    birth_date = serializers.DateField(required=False)
+    language = serializers.ChoiceField(choices=LANGUAGES)
+    avatar_media_id = NullableUuidField(required=False)
+    partner = PersonSummarySerializer(required=False, allow_null=True)
+
+    def to_representation(self, instance: Any) -> dict[str, Any]:
+        data = dict(super().to_representation(instance))
+        if data.get("birth_date") is None:
+            data.pop("birth_date", None)  # optional and not nullable in the contract
+        return data
+
+
+class MeInputSerializer(serializers.Serializer[Any]):
+    name = serializers.CharField(min_length=1, max_length=80, required=False)
+    language = serializers.ChoiceField(choices=LANGUAGES, required=False)
+    avatar_media_id = NullableUuidField(required=False)
+
+
+class ChangePasswordInputSerializer(serializers.Serializer[Any]):
+    current_password = serializers.CharField(trim_whitespace=False, allow_blank=True)
+    new_password = serializers.CharField(min_length=10, trim_whitespace=False)
+
+
+@extend_schema_field({"oneOf": [{"type": "string", "format": "date"}]})
+class NullableDateField(serializers.DateField):
+    """`CivilDate | null` as a `oneOf`, like the contract."""
+
+
+class CoupleSerializer(serializers.Serializer[Any]):
+    id = serializers.UUIDField()
+    partners = serializers.ListField(child=PersonSummarySerializer(), max_length=2)
+    relationship_start = NullableDateField(required=False, allow_null=True)
+    days_together = serializers.IntegerField(required=False, allow_null=True)
+    timezone = serializers.CharField()
+    version = serializers.IntegerField()

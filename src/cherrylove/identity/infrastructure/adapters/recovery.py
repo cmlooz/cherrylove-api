@@ -4,18 +4,14 @@ from __future__ import annotations
 
 import uuid
 
-from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import default_token_generator
-from django.core.exceptions import ValidationError
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 
 from cherrylove.identity.application.ports import RecoveryRecipient
+from cherrylove.identity.infrastructure.adapters.passwords import DjangoPasswords
 from cherrylove.identity.infrastructure.orm import User
-from cherrylove.shared.domain.errors import FieldError
 from cherrylove.shared.domain.ids import UserId
-
-DJANGO_TO_FIELD_CODE = {"password_too_short": "too_short"}
 
 
 class DjangoRecoveryAccounts:
@@ -45,11 +41,4 @@ class DjangoRecoveryAccounts:
         return UserId(user.id)
 
     def set_password(self, user_id: UserId, password: str) -> None:
-        user = User.objects.get(id=user_id.value)
-        try:
-            validate_password(password, user)
-        except ValidationError as error:
-            code = DJANGO_TO_FIELD_CODE.get(error.error_list[0].code or "", "invalid_format")
-            raise FieldError("/new_password", code) from None
-        user.set_password(password)
-        user.save(update_fields=["password", "updated_at"])
+        DjangoPasswords().set(user_id, password)
