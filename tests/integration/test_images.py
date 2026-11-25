@@ -33,6 +33,7 @@ RUNTIME_ENV = {
     "EMAIL_PORT": "1025",
     "DEFAULT_FROM_EMAIL": "CherryLove <noreply@example.com>",
     "INVITE_LINK_TEMPLATE": "http://localhost:5173/invites/{token}",
+    "RECOVERY_LINK_TEMPLATE": "http://localhost:5173/password-recovery/{uid}/{token}",
     "DB_NAME": "cherrylove",
     "DB_HOST": "127.0.0.1",
     "DB_PORT": "5432",

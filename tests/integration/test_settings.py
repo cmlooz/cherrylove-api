@@ -29,6 +29,7 @@ DUMMY_PRODUCTION_ENV = {
     "EMAIL_PORT": "587",
     "DEFAULT_FROM_EMAIL": "CherryLove <noreply@example.com>",
     "INVITE_LINK_TEMPLATE": "https://app.example.com/invites/{token}",
+    "RECOVERY_LINK_TEMPLATE": "https://app.example.com/password-recovery/{uid}/{token}",
     "DB_NAME": "cherrylove",
     "DB_USER": "app",
     "DB_PASSWORD": "dummy",
