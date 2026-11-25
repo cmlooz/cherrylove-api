@@ -37,7 +37,7 @@ def test_password_is_hashed_with_argon2_first() -> None:
 def test_email_is_stored_lower_case_and_unique_ignoring_case() -> None:
     User.objects.create_user("  Camila@Example.COM ", "correct horse battery", name="Camila")
     assert User.objects.get().email == "camila@example.com"
-    with transaction.atomic(), connections["default"].cursor() as cursor, pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic(), connections["default"].cursor() as cursor:
         cursor.execute(
             "INSERT INTO identity_user (id, email, password, name, language, is_active, is_staff, is_superuser,"
             " version, created_at, updated_at) VALUES (gen_random_uuid(), 'CAMILA@example.com', 'x', 'C', 'es',"
@@ -50,5 +50,5 @@ def test_email_is_stored_lower_case_and_unique_ignoring_case() -> None:
 @pytest.mark.parametrize(("field", "value"), [("language", "fr"), ("name", "")])
 def test_database_checks_language_and_name(field: str, value: str) -> None:
     fields = {"name": "Camila", "language": "es", field: value}
-    with transaction.atomic(), pytest.raises(IntegrityError):
+    with pytest.raises(IntegrityError), transaction.atomic():
         User.objects.create_user(f"{field}@example.com", "correct horse battery", **fields)
