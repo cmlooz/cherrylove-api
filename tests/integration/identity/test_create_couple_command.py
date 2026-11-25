@@ -34,6 +34,11 @@ def _audited(action: str, entity_id: uuid.UUID) -> int:
     return int(row[0])
 
 
+def _email(name: str) -> str:
+    """Unique per test: transactional tests share the database (ADR-014 §4, no test depends on another)."""
+    return f"{name}.{uuid.uuid4().hex[:8]}@example.com"
+
+
 def _invite_jobs(invite_ids: set[uuid.UUID]) -> int:
     keys = {f"email:invite:{invite_id}" for invite_id in invite_ids}
     return sum(1 for row in DBTaskResult.objects.all() if row.args_kwargs["args"][2] in keys)
@@ -42,7 +47,8 @@ def _invite_jobs(invite_ids: set[uuid.UUID]) -> int:
 @pytest.mark.req("REQ-F-AUTH-01")
 @pytest.mark.django_db(transaction=True)
 def test_one_transaction_creates_everything_the_couple_needs() -> None:
-    couple_id = _create("Camila@Example.com", "andres@example.com")
+    camila, andres = _email("camila"), _email("andres")
+    couple_id = _create(camila.upper(), andres)
 
     couple = Couple.objects.get(id=couple_id)
     assert (couple.status, couple.timezone) == ("active", "America/Bogota")
@@ -50,8 +56,8 @@ def test_one_transaction_creates_everything_the_couple_needs() -> None:
     assert CoupleDataKey.objects.filter(couple_id=couple_id, key_id=1).count() == 1
     invites = list(Invite.objects.filter(couple_id=couple_id).order_by("slot"))
     assert [(i.slot, i.email, i.status, i.token_hash) for i in invites] == [
-        (1, "camila@example.com", "pending", None),
-        (2, "andres@example.com", "pending", None),
+        (1, camila, "pending", None),
+        (2, andres, "pending", None),
     ]
     assert _invite_jobs({i.id for i in invites}) == 2
     assert _audited("admin.couple_created", couple_id) == 1
@@ -60,12 +66,13 @@ def test_one_transaction_creates_everything_the_couple_needs() -> None:
 @pytest.mark.req("REQ-F-AUTH-10")
 @pytest.mark.django_db(transaction=True)
 def test_an_email_already_in_a_couple_creates_nothing() -> None:
-    user = User.objects.create_user("camila@example.com", "correct horse battery", name="Camila")
+    camila, andres = _email("camila"), _email("andres")
+    user = User.objects.create_user(camila, "correct horse battery", name="Camila")
     CoupleMembership.objects.create(couple=Couple.objects.create(), user=user, slot=1)
     couples_before = Couple.objects.count()
 
     with pytest.raises(CommandError, match="email_already_in_couple"):
-        _create("camila@example.com", "andres@example.com")
+        _create(camila, andres)
 
     assert Couple.objects.count() == couples_before
-    assert not Invite.objects.filter(email="andres@example.com").exists()
+    assert not Invite.objects.filter(email=andres).exists()
