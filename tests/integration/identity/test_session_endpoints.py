@@ -122,5 +122,7 @@ def test_replaying_a_rotated_refresh_revokes_every_session_of_the_user(client: C
     for refresh in (rotated["refresh"], other_device):
         dead = client.post("/api/v1/auth/refresh", {"refresh": refresh}, content_type="application/json")
         assert dead.status_code == 401, "every session of the user is revoked"
-    [event] = [e for e in _audit("auth.refresh_reused") if e["entity_id"] == user.id]
-    assert event["changes"] == {"revoked_sessions": {"from": None, "to": 2}}
+    changes = [e["changes"] for e in _audit("auth.refresh_reused") if e["entity_id"] == user.id]
+    # The replay killed the 2 live sessions; each later attempt with a dead copy is reuse again (0 left).
+    assert {"revoked_sessions": {"from": None, "to": 2}} in changes
+    assert changes.count({"revoked_sessions": {"from": None, "to": 0}}) == 2
