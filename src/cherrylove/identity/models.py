@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from cherrylove.identity.infrastructure.orm import Couple, CoupleMembership, User
+from cherrylove.identity.infrastructure.orm import Couple, CoupleMembership, Invite, User
 
-__all__ = ["Couple", "CoupleMembership", "User"]
+__all__ = ["Couple", "CoupleMembership", "Invite", "User"]

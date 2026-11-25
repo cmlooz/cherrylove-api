@@ -114,3 +114,46 @@ class CoupleMembership(models.Model):
 
     def __str__(self) -> str:
         return f"{self.couple_id}:{self.slot}"
+
+
+class Invite(models.Model):
+    """DATA-001 §3. The token is issued by the send-email job; only its SHA-256 is ever stored (ADR-004 §4)."""
+
+    class Status(models.TextChoices):
+        PENDING = "pending"
+        ACCEPTED = "accepted"
+        REVOKED = "revoked"
+        EXPIRED = "expired"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid7, editable=False)
+    couple = models.ForeignKey(Couple, on_delete=models.PROTECT, related_name="invites")
+    slot = models.PositiveSmallIntegerField()
+    email = models.EmailField(max_length=254)
+    token_hash = models.BinaryField(null=True, unique=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    expires_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.PROTECT, null=True, related_name="+")
+    sent_at = models.DateTimeField(null=True)
+    accepted_at = models.DateTimeField(null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        app_label = "identity"
+        db_table = "identity_invite"
+        constraints: ClassVar = [
+            models.CheckConstraint(condition=models.Q(slot__in=[1, 2]), name="identity_invite_slot"),
+            models.CheckConstraint(
+                condition=models.Q(status__in=["pending", "accepted", "revoked", "expired"]),
+                name="identity_invite_status",
+            ),
+            models.CheckConstraint(condition=models.Q(email=Lower("email")), name="identity_invite_email_lower"),
+            # One live invite per seat (DATA-001 §3).
+            models.UniqueConstraint(
+                fields=["couple", "slot"],
+                condition=models.Q(status="pending"),
+                name="identity_invite_one_pending_per_seat",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return str(self.id)

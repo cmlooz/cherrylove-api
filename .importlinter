@@ -23,6 +23,10 @@ layers =
     interfaces | infrastructure
     application
     domain
+# wiring.py is the module's composition root (ADR-002 §1): inbound adapters get built use cases from it.
+ignore_imports =
+    cherrylove.*.interfaces.** -> cherrylove.*.wiring
+unmatched_ignore_imports_alerting = none
 
 [importlinter:contract:independence]
 name = Modules talk only through application.public (ADR-001 §3)
