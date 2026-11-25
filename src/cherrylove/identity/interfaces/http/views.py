@@ -5,7 +5,6 @@ from __future__ import annotations
 from drf_spectacular.utils import extend_schema
 from rest_framework.request import Request
 from rest_framework.response import Response
-from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from cherrylove.identity import wiring
@@ -17,12 +16,13 @@ from cherrylove.identity.interfaces.http.serializers import (
 )
 from cherrylove.identity.interfaces.http.sessions import session_response
 from cherrylove.shared.interfaces.http.contract import error_headers, error_responses
+from cherrylove.shared.interfaces.http.throttling import FailClosedScopedThrottle, FailOpenScopedThrottle
 
 
 class InviteView(APIView):
     authentication_classes = ()
     permission_classes = ()
-    throttle_classes = (ScopedRateThrottle,)
+    throttle_classes = (FailOpenScopedThrottle,)  # viewing an invite is not an auth attempt
     throttle_scope = "invite"
 
     @extend_schema(
@@ -40,7 +40,7 @@ class InviteView(APIView):
 class AcceptInviteView(APIView):
     authentication_classes = ()
     permission_classes = ()
-    throttle_classes = (ScopedRateThrottle,)
+    throttle_classes = (FailClosedScopedThrottle,)  # accepting sets a password: auth scope (ADR-011 §2)
     throttle_scope = "invite"
 
     @extend_schema(

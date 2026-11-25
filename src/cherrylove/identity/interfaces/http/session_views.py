@@ -26,6 +26,7 @@ from cherrylove.identity.interfaces.http.sessions import (
     session_response,
 )
 from cherrylove.shared.interfaces.http.contract import error_headers, error_responses
+from cherrylove.shared.interfaces.http.throttling import IpAndEmailThrottle
 
 REQUEST_ID = OpenApiParameter(
     "X-Request-ID", type={"type": "string", "maxLength": 64}, location=OpenApiParameter.HEADER, required=False
@@ -49,6 +50,8 @@ def _info(request: Request, client: str) -> RequestInfo:
 class LoginView(APIView):
     authentication_classes = ()
     permission_classes = ()
+    throttle_classes = (IpAndEmailThrottle,)
+    throttle_scope = "login"
 
     @extend_schema(
         operation_id="identity_create_session",
