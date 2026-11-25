@@ -109,3 +109,14 @@ def test_omitted_and_empty_security_both_mean_no_auth() -> None:
     authenticated = _spec()
     authenticated["security"] = [{"bearerAuth": []}]
     assert drift(authenticated, _spec(), pending=set()) == ["cards_get_card: differs from the approved contract"]
+
+
+@pytest.mark.req("REQ-N-ARC-03")
+def test_an_omitted_parameter_required_flag_means_false() -> None:
+    explicit, implicit = _spec(), _spec()
+    header = {"name": "X-Request-ID", "in": "header", "schema": {"type": "string"}}
+    explicit["paths"]["/cards/{card_id}"]["get"]["parameters"] = [{**header, "required": False}]
+    implicit["paths"]["/cards/{card_id}"]["get"]["parameters"] = [header]
+    assert drift(explicit, implicit, pending=set()) == []
+    implicit["paths"]["/cards/{card_id}"]["get"]["parameters"] = [{**header, "required": True}]
+    assert drift(explicit, implicit, pending=set()) == ["cards_get_card: differs from the approved contract"]

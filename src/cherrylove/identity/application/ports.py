@@ -101,3 +101,29 @@ class Session:
 
 class TokenIssuer(Protocol):
     def issue(self, user_id: UserId) -> Session: ...
+
+
+@dataclass(frozen=True, slots=True)
+class Account:
+    """What login needs to know about a verified account; nothing about its content."""
+
+    user_id: UserId
+    couple_id: CoupleId
+    couple_archived: bool
+
+
+class CredentialCheck(Protocol):
+    def verify(self, email: str, password: str) -> Account | None:
+        """The partner account behind valid credentials, or None (unknown email, wrong password, inactive
+        user, staff or no couple). The password check runs even for unknown emails (no timing oracle)."""
+        ...
+
+
+class SessionStore(Protocol):
+    def rotate(self, refresh: str) -> tuple[UserId, Session]:
+        """Blacklist `refresh` and return a new pair; raises NotAuthenticated when it is not usable."""
+        ...
+
+    def revoke(self, refresh: str) -> UserId | None:
+        """Blacklist `refresh`; the owner, or None when it was already unusable."""
+        ...

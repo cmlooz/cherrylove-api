@@ -6,7 +6,7 @@ import uuid
 from collections.abc import Iterable
 from datetime import date, datetime
 
-from cherrylove.identity.application.ports import InviteContext, NewPartner
+from cherrylove.identity.application.ports import Account, InviteContext, NewPartner
 from cherrylove.identity.domain.invite import InviteSnapshot, Slot
 from cherrylove.identity.infrastructure.orm import Couple, CoupleMembership, Invite, User
 from cherrylove.shared.domain.ids import CoupleId, UserId
@@ -80,4 +80,20 @@ class DjangoPartnerRepository:
     def set_relationship_start(self, couple_id: CoupleId, relationship_start: date) -> None:
         Couple.objects.filter(id=couple_id.value, relationship_start__isnull=True).update(
             relationship_start=relationship_start
+        )
+
+
+class DjangoCredentialCheck:
+    def verify(self, email: str, password: str) -> Account | None:
+        user = User.objects.filter(email=email).select_related("membership__couple").first()
+        if user is None:
+            User().set_password(password)  # same Argon2 cost as a real check (Django ModelBackend does this)
+            return None
+        if not user.check_password(password) or not user.is_active or user.is_staff or user.is_superuser:
+            return None
+        membership = CoupleMembership.objects.select_related("couple").filter(user_id=user.id).first()
+        if membership is None:
+            return None
+        return Account(
+            UserId(user.id), CoupleId(membership.couple_id), membership.couple.status == Couple.Status.ARCHIVED
         )

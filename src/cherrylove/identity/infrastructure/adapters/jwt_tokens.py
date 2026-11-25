@@ -7,6 +7,7 @@ refresh token keeps its `token_type`, and access verification refuses any token 
 
 from __future__ import annotations
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
@@ -15,7 +16,8 @@ from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import AccessToken, RefreshToken
 
 from cherrylove.identity.application.ports import Session
-from cherrylove.identity.infrastructure.orm import User
+from cherrylove.identity.infrastructure.orm import Couple, User
+from cherrylove.shared.domain.errors import NotAuthenticated
 from cherrylove.shared.domain.ids import UserId
 
 
@@ -44,3 +46,47 @@ class JwtTokenIssuer:
         refresh = PartnerRefreshToken.for_user(User.objects.get(id=user_id.value))
         access = refresh.access_token
         return Session(str(access), _expiry(access), str(refresh), _expiry(refresh))
+
+
+def _partner(user_id: object) -> User | None:
+    """An active partner of an active couple: anyone else loses refresh rights (ADR-004 §3, REQ-F-AUTH-09)."""
+    return (
+        User.objects.filter(
+            id=str(user_id),
+            is_active=True,
+            is_staff=False,
+            membership__couple__status=Couple.Status.ACTIVE,
+        )
+        .select_related("membership")
+        .first()
+    )
+
+
+def _encoded(refresh: str) -> Any:
+    """SimpleJWT's hints say `Token | None`, but its constructor takes the encoded string (documented API)."""
+    return refresh
+
+
+class JwtSessionStore:
+    """Rotation and revocation on SimpleJWT's outstanding/blacklisted tables; library errors become port errors."""
+
+    def rotate(self, refresh: str) -> tuple[UserId, Session]:
+        try:
+            token = PartnerRefreshToken(_encoded(refresh))
+            token.check_blacklist()
+        except TokenError:
+            raise NotAuthenticated("unusable refresh token") from None
+        user = _partner(token["sub"])
+        if user is None:
+            raise NotAuthenticated("the account can no longer refresh")
+        token.blacklist()
+        return UserId(user.id), JwtTokenIssuer().issue(UserId(user.id))
+
+    def revoke(self, refresh: str) -> UserId | None:
+        try:
+            token = PartnerRefreshToken(_encoded(refresh))
+            token.check_blacklist()
+        except TokenError:
+            return None
+        token.blacklist()
+        return UserId(uuid.UUID(str(token["sub"])))

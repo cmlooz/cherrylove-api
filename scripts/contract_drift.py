@@ -85,6 +85,8 @@ def operations(spec: dict[str, Json]) -> dict[str, Json]:
             if operation_id in found:
                 raise ValueError(f"duplicated operationId {operation_id}")
             parameters = normalize(spec, [*shared_parameters, *operation.get("parameters", [])])
+            for parameter in parameters:
+                parameter.setdefault("required", False)  # OpenAPI default: omitted == false
             found[operation_id] = {
                 "method": method,
                 "path": path,
