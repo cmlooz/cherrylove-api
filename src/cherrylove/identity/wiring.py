@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
+from django.conf import settings
+
 from cherrylove.audit.application.public import audit_log
 from cherrylove.identity.application.commands.create_couple import CreateCouple
+from cherrylove.identity.application.commands.invites import IssueInviteToken
+from cherrylove.identity.application.commands.send_invite_email import SendInviteEmail
+from cherrylove.identity.infrastructure.adapters.mailer import DjangoInviteMailer
 from cherrylove.identity.infrastructure.adapters.provisioning import CoupleDataKeyProvisioner, SyncStateViaFacade
+from cherrylove.identity.infrastructure.adapters.tokens import SecretsTokenGenerator
 from cherrylove.identity.infrastructure.repositories import (
     DjangoCoupleRepository,
     DjangoInviteRepository,
@@ -26,4 +32,15 @@ def create_couple() -> CreateCouple:
         provisioners=(SyncStateViaFacade(), CoupleDataKeyProvisioner()),
         jobs=DjangoJobQueue(),
         audit=audit_log(),
+    )
+
+
+def send_invite_email() -> SendInviteEmail:
+    invites, clock = DjangoInviteRepository(), SystemClock()
+    return SendInviteEmail(
+        invites=invites,
+        issue=IssueInviteToken(invites, SecretsTokenGenerator(), clock),
+        mailer=DjangoInviteMailer(),
+        clock=clock,
+        link_template=settings.INVITE_LINK_TEMPLATE,
     )
