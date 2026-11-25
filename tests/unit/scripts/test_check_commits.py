@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
-from scripts.check_commits import Commit, check_commit, check_pr_body
+from scripts.check_commits import DEPENDABOT_EMAIL, Commit, check_commit, check_pr_body, main
 
 SHA = "0123456789abcdef"
 
@@ -54,3 +56,34 @@ def test_pr_body_needs_traceability_section_and_a_req_id() -> None:
         "PR body: missing the '## Traceability' section of the template",
         "PR body: cites no REQ ID",
     ]
+
+
+BUMP = "build(deps): Bump astral-sh/setup-uv from 10.3.3 to 10.4.0 in the actions group across 1 directory"
+
+
+@pytest.mark.req("REQ-N-QA-06")
+def test_a_dependabot_commit_is_traced_to_adr_015_but_keeps_the_subject_rule() -> None:
+    assert check_commit(Commit(SHA, BUMP, DEPENDABOT_EMAIL), dependency_update=True) == []
+    assert check_commit(Commit(SHA, BUMP, DEPENDABOT_EMAIL)), "without the flag the ID rule applies"
+    assert check_commit(Commit(SHA, "Bump things", DEPENDABOT_EMAIL), dependency_update=True)
+
+
+@pytest.mark.req("REQ-N-QA-06")
+@pytest.mark.parametrize(
+    "case",
+    [
+        ("dependabot[bot]", DEPENDABOT_EMAIL, 0),
+        ("dependabot[bot]", "camilo@example.com", 1),  # a human commit on a bot PR still needs an ID
+        ("cmlooz", DEPENDABOT_EMAIL, 3),  # a human PR never skips, whatever the commit author says
+    ],
+)
+def test_only_dependabot_commits_on_dependabot_prs_skip_the_ids(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str], case: tuple[str, str, int]
+) -> None:
+    author, email, failures = case
+    monkeypatch.setattr("scripts.check_commits.commits_in", lambda _: [Commit(SHA, BUMP, email)])
+    body = tmp_path / "body.md"
+    body.write_text("Bumps setup-uv.", encoding="utf-8")
+    code = main(["--range", "a..b", "--pr-body-file", str(body), "--pr-author", author])
+    assert code == (1 if failures else 0)
+    assert capsys.readouterr().err.count("traceability:") == failures
