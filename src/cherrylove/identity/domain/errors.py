@@ -10,3 +10,23 @@ class EmailAlreadyInCouple(DomainError):
 
     code = "email_already_in_couple"
     status = 409
+
+
+class InviteExpired(DomainError):
+    code = "invite_expired"
+    status = 409
+
+
+class InviteRevoked(DomainError):
+    code = "invite_revoked"
+    status = 409
+
+
+class CoupleFull(DomainError):
+    code = "couple_full"
+    status = 409
+
+
+class CoupleArchived(DomainError):
+    code = "couple_archived"
+    status = 409

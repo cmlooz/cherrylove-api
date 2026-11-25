@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
-from datetime import datetime
+from dataclasses import dataclass
+from datetime import date, datetime
 from typing import Protocol
 
 from cherrylove.identity.domain.invite import InviteSnapshot, Slot
-from cherrylove.shared.domain.ids import CoupleId
+from cherrylove.shared.domain.ids import CoupleId, UserId
 
 
 class MembershipQuery(Protocol):
@@ -53,3 +54,50 @@ class CoupleProvisioner(Protocol):
 
 class InviteMailer(Protocol):
     def send(self, to: str, subject: str, body: str) -> None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class InviteContext:
+    """An invite found by its token hash, with what accepting it depends on."""
+
+    invite: InviteSnapshot
+    couple_archived: bool
+    seat_taken: bool
+    relationship_start: date | None
+
+
+class InviteLookup(Protocol):
+    def by_token_hash(self, token_hash: bytes) -> InviteContext | None: ...
+
+
+@dataclass(frozen=True, slots=True)
+class NewPartner:
+    email: str
+    name: str
+    birth_date: date
+    password: str
+    language: str
+
+
+class PartnerRepository(Protocol):
+    def add(self, user_id: UserId, partner: NewPartner, couple_id: CoupleId, slot: Slot) -> None:
+        """User (password hashed by the adapter) and membership, in the current transaction."""
+        ...
+
+    def accept_invite(self, invite_id: uuid.UUID, accepted_at: datetime) -> None: ...
+
+    def set_relationship_start(self, couple_id: CoupleId, relationship_start: date) -> None:
+        """Only when the couple has none yet: the first partner decides it (REQ-F-AUTH-04)."""
+        ...
+
+
+@dataclass(frozen=True, slots=True)
+class Session:
+    access: str
+    access_expires_at: datetime
+    refresh: str
+    refresh_expires_at: datetime
+
+
+class TokenIssuer(Protocol):
+    def issue(self, user_id: UserId) -> Session: ...

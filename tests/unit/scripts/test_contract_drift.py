@@ -99,3 +99,13 @@ def test_recursive_refs_terminate() -> None:
     }
     result = normalize(copy.deepcopy(spec), {"$ref": "#/components/schemas/Node"})
     assert result == {"properties": {"child": {"$recursive": "Node"}}}
+
+
+@pytest.mark.req("REQ-N-ARC-03")
+def test_omitted_and_empty_security_both_mean_no_auth() -> None:
+    explicit = _spec()
+    explicit["paths"]["/cards/{card_id}"]["get"]["security"] = []
+    assert drift(explicit, _spec(), pending=set()) == []
+    authenticated = _spec()
+    authenticated["security"] = [{"bearerAuth": []}]
+    assert drift(authenticated, _spec(), pending=set()) == ["cards_get_card: differs from the approved contract"]

@@ -5,10 +5,11 @@ from __future__ import annotations
 import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
+from cherrylove.identity.application.ports import InviteContext, NewPartner, Session
 from cherrylove.identity.domain.invite import InviteSnapshot, Slot
-from cherrylove.shared.domain.ids import CoupleId
+from cherrylove.shared.domain.ids import CoupleId, UserId
 
 
 @dataclass
@@ -87,3 +88,37 @@ class RecordingProvisioner:
 
     def provision(self, couple_id: CoupleId) -> None:
         self.provisioned.append(couple_id)
+
+
+@dataclass
+class InMemoryInviteLookup:
+    by_hash: dict[bytes, InviteContext] = field(default_factory=dict)
+
+    def by_token_hash(self, token_hash: bytes) -> InviteContext | None:
+        return self.by_hash.get(token_hash)
+
+
+@dataclass
+class InMemoryPartners:
+    added: list[tuple[UserId, NewPartner, CoupleId, Slot]] = field(default_factory=list)
+    accepted: list[uuid.UUID] = field(default_factory=list)
+    relationship_starts: dict[CoupleId, date] = field(default_factory=dict)
+
+    def add(self, user_id: UserId, partner: NewPartner, couple_id: CoupleId, slot: Slot) -> None:
+        self.added.append((user_id, partner, couple_id, slot))
+
+    def accept_invite(self, invite_id: uuid.UUID, accepted_at: datetime) -> None:
+        self.accepted.append(invite_id)
+
+    def set_relationship_start(self, couple_id: CoupleId, relationship_start: date) -> None:
+        self.relationship_starts.setdefault(couple_id, relationship_start)
+
+
+@dataclass
+class FakeTokenIssuer:
+    issued: list[UserId] = field(default_factory=list)
+
+    def issue(self, user_id: UserId) -> Session:
+        self.issued.append(user_id)
+        now = datetime(2026, 11, 18, 14, 0)
+        return Session(f"access-{user_id}", now + timedelta(minutes=10), f"refresh-{user_id}", now + timedelta(days=30))
