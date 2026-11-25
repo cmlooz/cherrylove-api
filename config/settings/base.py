@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "cherrylove.shared.apps.SharedConfig",
     "cherrylove.audit.apps.AuditConfig",
     "cherrylove.identity.apps.IdentityConfig",
+    "cherrylove.sync.apps.SyncConfig",
 ]
 
 # Custom user from the first identity migration (ADR-004 §4, DATA-001 §3); Argon2 first (argon2-cffi).
@@ -53,6 +54,7 @@ MIGRATION_MODULES = {
     "shared": "cherrylove.shared.infrastructure.migrations",
     "audit": "cherrylove.audit.infrastructure.migrations",
     "identity": "cherrylove.identity.infrastructure.migrations",
+    "sync": "cherrylove.sync.infrastructure.migrations",
 }
 
 MIDDLEWARE = [
