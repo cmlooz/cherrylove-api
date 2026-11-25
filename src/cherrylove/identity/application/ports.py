@@ -134,6 +134,10 @@ class SessionStore(Protocol):
         """Blacklist every outstanding refresh of the user; how many were still live."""
         ...
 
+    def revoke_others(self, user_id: UserId, keep_session: str) -> int:
+        """Blacklist every live refresh of the user outside session `keep_session` (DEC-051); how many."""
+        ...
+
     def rotate(self, refresh: str) -> tuple[UserId, Session]:
         """Blacklist `refresh` and return a new pair; raises NotAuthenticated when it is not usable."""
         ...

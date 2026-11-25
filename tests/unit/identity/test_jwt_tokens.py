@@ -19,6 +19,7 @@ from cherrylove.shared.infrastructure.checks import jwt_signing_key_is_its_own
 def _pair() -> tuple[AccessToken, PartnerRefreshToken]:
     refresh = PartnerRefreshToken()
     refresh["sub"] = str(uuid.uuid7())
+    refresh["sid"] = str(refresh["jti"])
     return refresh.access_token, refresh
 
 
@@ -28,10 +29,11 @@ def _claims(token: object) -> dict[str, object]:
 
 
 @pytest.mark.req("REQ-N-SEC-01")
-def test_access_token_has_only_sub_exp_iat_jti_and_lives_10_minutes() -> None:
-    access, _ = _pair()
+def test_access_token_has_only_sub_exp_iat_jti_sid_and_lives_10_minutes() -> None:
+    access, refresh = _pair()
     claims = _claims(access)
-    assert set(claims) == {"sub", "exp", "iat", "jti"}
+    assert set(claims) == {"sub", "exp", "iat", "jti", "sid"}, "DEC-051 adds sid, nothing else"
+    assert claims["sid"] == refresh["sid"]
     assert "couple_id" not in claims
     assert int(str(claims["exp"])) - int(str(claims["iat"])) == timedelta(minutes=10).total_seconds()
 

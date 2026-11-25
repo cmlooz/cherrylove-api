@@ -23,8 +23,9 @@ class Partner:
     is_anonymous = False
     is_active = True
 
-    def __init__(self, actor: Actor) -> None:
+    def __init__(self, actor: Actor, session_id: str | None = None) -> None:
         self.actor = actor
+        self.session_id = session_id  # the token's `sid` (DEC-051); None for tokens issued before it
 
     @property
     def pk(self) -> uuid.UUID:

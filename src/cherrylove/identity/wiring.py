@@ -7,6 +7,7 @@ from functools import cache
 from django.conf import settings
 
 from cherrylove.audit.application.public import audit_log
+from cherrylove.identity.application.commands.account import ChangePassword, UpdateMe
 from cherrylove.identity.application.commands.create_couple import CreateCouple
 from cherrylove.identity.application.commands.deactivate_user import DeactivateUser
 from cherrylove.identity.application.commands.invites import IssueInviteToken
@@ -18,12 +19,15 @@ from cherrylove.identity.application.commands.password_recovery import (
 )
 from cherrylove.identity.application.commands.send_invite_email import SendInviteEmail
 from cherrylove.identity.application.commands.sessions import Login, Logout, RefreshSession
+from cherrylove.identity.application.queries.profile import GetCoupleHeader, GetMe
 from cherrylove.identity.infrastructure.adapters.actor_resolver import CachedActorResolver
 from cherrylove.identity.infrastructure.adapters.jwt_tokens import JwtSessionStore, JwtTokenIssuer
 from cherrylove.identity.infrastructure.adapters.mailer import DjangoInviteMailer
+from cherrylove.identity.infrastructure.adapters.passwords import DjangoPasswords, DjangoProfiles
 from cherrylove.identity.infrastructure.adapters.provisioning import CoupleDataKeyProvisioner, SyncStateViaFacade
 from cherrylove.identity.infrastructure.adapters.recovery import DjangoRecoveryAccounts
 from cherrylove.identity.infrastructure.adapters.tokens import SecretsTokenGenerator
+from cherrylove.identity.infrastructure.queries import DjangoProfileQuery
 from cherrylove.identity.infrastructure.repositories import (
     DjangoAccountStatus,
     DjangoCoupleRepository,
@@ -123,3 +127,19 @@ def actor_resolver() -> CachedActorResolver:
 
 def deactivate_user() -> DeactivateUser:
     return DeactivateUser(DjangoUnitOfWork(), DjangoAccountStatus(), JwtSessionStore(), actor_resolver(), audit_log())
+
+
+def get_me() -> GetMe:
+    return GetMe(DjangoProfileQuery())
+
+
+def get_couple_header() -> GetCoupleHeader:
+    return GetCoupleHeader(DjangoProfileQuery(), SystemClock())
+
+
+def update_me() -> UpdateMe:
+    return UpdateMe(DjangoUnitOfWork(), DjangoProfiles(), actor_resolver(), audit_log())
+
+
+def change_password() -> ChangePassword:
+    return ChangePassword(DjangoUnitOfWork(), DjangoPasswords(), JwtSessionStore(), audit_log())
