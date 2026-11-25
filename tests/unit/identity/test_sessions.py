@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from cherrylove.identity.application.commands.sessions import Login, Logout, RefreshSession, RequestInfo
-from cherrylove.identity.application.ports import Account, Session
+from cherrylove.identity.application.ports import Account, RefreshCheck, Session
 from cherrylove.identity.domain.errors import CoupleArchived, InvalidCredentials
 from cherrylove.shared.application.audit_log import email_fingerprint
 from cherrylove.shared.domain.errors import NotAuthenticated
@@ -35,6 +35,17 @@ class FakeCredentials:
 class FakeStore:
     refreshed: list[str] = field(default_factory=list)
     revoked: list[str] = field(default_factory=list)
+    reused: set[str] = field(default_factory=set)
+    killed: list[UserId] = field(default_factory=list)
+
+    def check(self, refresh: str) -> RefreshCheck:
+        if refresh in self.reused:
+            return RefreshCheck("reused", USER)
+        return RefreshCheck("valid" if refresh.startswith("r") else "invalid", USER)
+
+    def revoke_all(self, user_id: UserId) -> int:
+        self.killed.append(user_id)
+        return 3
 
     def rotate(self, refresh: str) -> tuple[UserId, Session]:
         self.refreshed.append(refresh)
@@ -99,3 +110,24 @@ def test_refresh_and_logout_need_a_token_and_are_audited() -> None:
     Logout(InMemoryUnitOfWork(), store, audit).execute(None, INFO)
     assert (store.refreshed, store.revoked) == (["r1"], ["r2"])
     assert [e.action for e in audit.events] == ["auth.refreshed", "auth.logout"]
+
+
+@pytest.mark.req("REQ-F-AUTH-07")
+def test_a_reused_refresh_kills_every_session_audits_and_fails() -> None:
+    store, audit = FakeStore(reused={"r-stolen"}), InMemoryAuditLog()
+    uow = InMemoryUnitOfWork()
+    with pytest.raises(NotAuthenticated):
+        RefreshSession(uow, store, audit).execute("r-stolen", INFO)
+    assert store.killed == [USER]
+    assert store.refreshed == []
+    [event] = audit.events
+    assert (event.action, event.changes) == ("auth.refresh_reused", {"revoked_sessions": {"from": None, "to": 3}})
+    assert uow.commits == 1, "the revocation commits before the 401"
+
+
+@pytest.mark.req("REQ-F-AUTH-07")
+def test_a_forged_refresh_is_rejected_without_side_effects() -> None:
+    store, audit = FakeStore(), InMemoryAuditLog()
+    with pytest.raises(NotAuthenticated):
+        RefreshSession(InMemoryUnitOfWork(), store, audit).execute("forged", INFO)
+    assert (store.killed, store.refreshed, audit.events) == ([], [], [])
