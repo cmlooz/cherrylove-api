@@ -24,7 +24,7 @@ dev = [
   "django-stubs==6.1.2",
   "djangorestframework-stubs==3.18.2",
   "hypothesis==6.170.17",
-  "import-linter==2.16",
+  "import-linter==2.17",
   "mypy==2.4.1",
   "pip-audit==2.10.1",
   "pytest==9.2.0",
