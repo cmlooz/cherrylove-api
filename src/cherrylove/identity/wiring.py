@@ -8,11 +8,17 @@ from cherrylove.audit.application.public import audit_log
 from cherrylove.identity.application.commands.create_couple import CreateCouple
 from cherrylove.identity.application.commands.invites import IssueInviteToken
 from cherrylove.identity.application.commands.onboarding import AcceptInvite, GetInvite
+from cherrylove.identity.application.commands.password_recovery import (
+    ConfirmPasswordRecovery,
+    RequestPasswordRecovery,
+    SendPasswordRecovery,
+)
 from cherrylove.identity.application.commands.send_invite_email import SendInviteEmail
 from cherrylove.identity.application.commands.sessions import Login, Logout, RefreshSession
 from cherrylove.identity.infrastructure.adapters.jwt_tokens import JwtSessionStore, JwtTokenIssuer
 from cherrylove.identity.infrastructure.adapters.mailer import DjangoInviteMailer
 from cherrylove.identity.infrastructure.adapters.provisioning import CoupleDataKeyProvisioner, SyncStateViaFacade
+from cherrylove.identity.infrastructure.adapters.recovery import DjangoRecoveryAccounts
 from cherrylove.identity.infrastructure.adapters.tokens import SecretsTokenGenerator
 from cherrylove.identity.infrastructure.repositories import (
     DjangoCoupleRepository,
@@ -78,3 +84,22 @@ def refresh_session() -> RefreshSession:
 
 def logout() -> Logout:
     return Logout(DjangoUnitOfWork(), JwtSessionStore(), audit_log())
+
+
+def request_password_recovery() -> RequestPasswordRecovery:
+    return RequestPasswordRecovery(
+        DjangoUnitOfWork(),
+        Uuid7Generator(),
+        DjangoRecoveryAccounts(),
+        DjangoJobQueue(),
+        audit_log(),
+        settings.AUDIT_HMAC_KEY,
+    )
+
+
+def send_password_recovery() -> SendPasswordRecovery:
+    return SendPasswordRecovery(DjangoRecoveryAccounts(), DjangoInviteMailer(), settings.RECOVERY_LINK_TEMPLATE)
+
+
+def confirm_password_recovery() -> ConfirmPasswordRecovery:
+    return ConfirmPasswordRecovery(DjangoUnitOfWork(), DjangoRecoveryAccounts(), JwtSessionStore(), audit_log())

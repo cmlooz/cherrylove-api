@@ -21,6 +21,7 @@ for _name, _value in {
     "EMAIL_PORT": "1025",
     "DEFAULT_FROM_EMAIL": "CherryLove <noreply@cherrylove.local>",
     "INVITE_LINK_TEMPLATE": "http://localhost:5173/invites/{token}",
+    "RECOVERY_LINK_TEMPLATE": "http://localhost:5173/password-recovery/{uid}/{token}",
     "DB_HOST": "127.0.0.1",
     "DB_PORT": "5432",
 }.items():

@@ -45,3 +45,22 @@ class IpAndEmailThrottle(FailClosedScopedThrottle):
         email = request.data.get("email", "") if hasattr(request.data, "get") else ""
         digest = hashlib.sha256(str(email).strip().lower().encode()).hexdigest()
         return self.cache_format % {"scope": self.scope, "ident": f"{self.get_ident(request)}:{digest}"}
+
+
+class BodyFieldThrottle(FailClosedScopedThrottle):
+    """Counts per value of one body field (hashed), e.g. the recovery email or uid (ADR-004 §4)."""
+
+    field = "email"
+
+    def get_cache_key(self, request: Request, view: Any) -> str | None:
+        value = request.data.get(self.field, "") if hasattr(request.data, "get") else ""
+        digest = hashlib.sha256(str(value).strip().lower().encode()).hexdigest()
+        return self.cache_format % {"scope": self.scope, "ident": digest}
+
+
+class RecoveryEmailThrottle(BodyFieldThrottle):
+    field = "email"
+
+
+class RecoveryUidThrottle(BodyFieldThrottle):
+    field = "uid"

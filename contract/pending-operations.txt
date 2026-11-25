@@ -16,9 +16,7 @@ favorites_unstar_item
 home_get_couple
 home_get_dashboard
 identity_change_password
-identity_confirm_password_recovery
 identity_get_me
-identity_request_password_recovery
 identity_update_me
 media_complete_upload
 media_create_signed_urls

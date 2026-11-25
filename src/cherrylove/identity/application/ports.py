@@ -141,3 +141,33 @@ class SessionStore(Protocol):
     def revoke(self, refresh: str) -> UserId | None:
         """Blacklist `refresh`; the owner, or None when it was already unusable."""
         ...
+
+
+@dataclass(frozen=True, slots=True)
+class RecoveryRecipient:
+    uid: str
+    email: str
+    name: str
+    language: str
+
+
+class RecoveryAccounts(Protocol):
+    def by_email(self, email: str) -> UserId | None:
+        """An active partner account (staff recover through the admin, never here)."""
+        ...
+
+    def recipient(self, user_id: uuid.UUID) -> RecoveryRecipient | None: ...
+
+    def issue_token(self, user_id: uuid.UUID) -> str: ...
+
+    def check_token(self, uid: str, token: str) -> UserId | None:
+        """The account when `token` is valid for it; None for anything wrong (no hint which)."""
+        ...
+
+    def set_password(self, user_id: UserId, password: str) -> None:
+        """Validates with AUTH_PASSWORD_VALIDATORS (FieldError on failure) and stores the Argon2 hash."""
+        ...
+
+
+class RecoveryMailer(Protocol):
+    def send(self, to: str, subject: str, body: str) -> None: ...

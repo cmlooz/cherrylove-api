@@ -30,7 +30,7 @@ class TokenPairSerializer(serializers.Serializer[Any]):
 
 
 @extend_schema_field({"type": "string", "format": "email"})
-class LoginEmailField(serializers.Field):  # type: ignore[type-arg]
+class ContractEmailField(serializers.Field):  # type: ignore[type-arg]
     """Any string, blank included: a malformed or unknown email fails exactly like a wrong password, with the
     contract's schema and no extra constraints (ADR-004 §4)."""
 
@@ -46,7 +46,7 @@ class LoginEmailField(serializers.Field):  # type: ignore[type-arg]
 
 
 class LoginInputSerializer(serializers.Serializer[Any]):
-    email = LoginEmailField()
+    email = ContractEmailField()
     # Blank is not a 400: the contract has no minLength, so it fails as invalid_credentials.
     password = serializers.CharField(trim_whitespace=False, allow_blank=True)
     client = serializers.ChoiceField(choices=[("web", "web"), ("mobile", "mobile")])
@@ -54,3 +54,14 @@ class LoginInputSerializer(serializers.Serializer[Any]):
 
 class RefreshInputSerializer(serializers.Serializer[Any]):
     refresh = serializers.CharField(required=False, allow_blank=True)
+
+
+class RecoveryRequestSerializer(serializers.Serializer[Any]):
+    email = ContractEmailField()
+
+
+class RecoveryConfirmSerializer(serializers.Serializer[Any]):
+    # Blank uid/token fail as invalid_token, never as a different error (no hint which part was wrong).
+    uid = serializers.CharField(allow_blank=True)
+    token = serializers.CharField(allow_blank=True)
+    new_password = serializers.CharField(min_length=10, trim_whitespace=False)

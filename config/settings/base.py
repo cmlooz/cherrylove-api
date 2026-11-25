@@ -41,6 +41,9 @@ EMAIL_PORT = env.integer("EMAIL_PORT")
 DEFAULT_FROM_EMAIL = env.required("DEFAULT_FROM_EMAIL")
 # Where an invite link opens; the route belongs to the web app (plan G). `{token}` is replaced.
 INVITE_LINK_TEMPLATE = env.required("INVITE_LINK_TEMPLATE")
+# Password recovery link (web route, plan G); `{uid}` and `{token}` are replaced. Tokens live 30 min (ADR-004 §4).
+RECOVERY_LINK_TEMPLATE = env.required("RECOVERY_LINK_TEMPLATE")
+PASSWORD_RESET_TIMEOUT = 30 * 60
 
 INSTALLED_APPS = [
     "django.contrib.contenttypes",
@@ -123,7 +126,7 @@ REST_FRAMEWORK: dict[str, object] = {
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     # Scoped throttles on Redis (ADR-004 §4).
-    "DEFAULT_THROTTLE_RATES": {"invite": "10/hour", "login": "5/min"},
+    "DEFAULT_THROTTLE_RATES": {"invite": "10/hour", "login": "5/min", "recovery": "3/hour"},
     "EXCEPTION_HANDLER": "cherrylove.shared.interfaces.http.problem_details.exception_handler",
 }
 
