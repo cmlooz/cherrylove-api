@@ -97,3 +97,13 @@ class DjangoCredentialCheck:
         return Account(
             UserId(user.id), CoupleId(membership.couple_id), membership.couple.status == Couple.Status.ARCHIVED
         )
+
+
+class DjangoAccountStatus:
+    def deactivate(self, user_id: UserId) -> bool | None:
+        user = User.objects.select_for_update().filter(id=user_id.value).only("is_active").first()
+        if user is None:
+            return None
+        was_active = user.is_active
+        User.objects.filter(id=user_id.value).update(is_active=False)
+        return was_active

@@ -8,6 +8,7 @@ from django.conf import settings
 
 from cherrylove.audit.application.public import audit_log
 from cherrylove.identity.application.commands.create_couple import CreateCouple
+from cherrylove.identity.application.commands.deactivate_user import DeactivateUser
 from cherrylove.identity.application.commands.invites import IssueInviteToken
 from cherrylove.identity.application.commands.onboarding import AcceptInvite, GetInvite
 from cherrylove.identity.application.commands.password_recovery import (
@@ -24,6 +25,7 @@ from cherrylove.identity.infrastructure.adapters.provisioning import CoupleDataK
 from cherrylove.identity.infrastructure.adapters.recovery import DjangoRecoveryAccounts
 from cherrylove.identity.infrastructure.adapters.tokens import SecretsTokenGenerator
 from cherrylove.identity.infrastructure.repositories import (
+    DjangoAccountStatus,
     DjangoCoupleRepository,
     DjangoCredentialCheck,
     DjangoInviteLookup,
@@ -117,3 +119,7 @@ def _cache() -> RedisCache:
 
 def actor_resolver() -> CachedActorResolver:
     return CachedActorResolver(_cache())
+
+
+def deactivate_user() -> DeactivateUser:
+    return DeactivateUser(DjangoUnitOfWork(), DjangoAccountStatus(), JwtSessionStore(), actor_resolver(), audit_log())
