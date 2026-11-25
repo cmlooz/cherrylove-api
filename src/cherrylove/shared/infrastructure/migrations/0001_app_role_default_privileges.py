@@ -31,5 +31,9 @@ class Migration(migrations.Migration):
     initial = True
     dependencies = []
     # Third-party tables must be created after the default privileges too (tests/architecture).
-    run_before = [("django_tasks_database", "0001_initial")]
+    run_before = [
+        ("django_tasks_database", "0001_initial"),
+        ("contenttypes", "0001_initial"),
+        ("auth", "0001_initial"),
+    ]
     operations = [migrations.RunSQL(GRANT, REVOKE)]

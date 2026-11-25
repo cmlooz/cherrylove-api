@@ -1,7 +1,7 @@
 """Settings shared by every environment. Values come only from environment variables (DEC-039).
 
-INSTALLED_APPS has no `django.contrib.auth` / `admin` until F2.1 (IMPL-API-001 F0), so no auth table
-exists before the custom user model.
+`django.contrib.auth` arrives with the custom user model (F2.1), so the first auth migration already uses
+`identity.User`; the Django Admin arrives in F9.
 """
 
 from __future__ import annotations
@@ -30,18 +30,29 @@ KEK = env.required("KEK")
 REDIS_URL = env.required("REDIS_URL")
 
 INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
     "rest_framework",
     "drf_spectacular",
     "django_tasks",
     "django_tasks_db",
     "cherrylove.shared.apps.SharedConfig",
     "cherrylove.audit.apps.AuditConfig",
+    "cherrylove.identity.apps.IdentityConfig",
+]
+
+# Custom user from the first identity migration (ADR-004 §4, DATA-001 §3); Argon2 first (argon2-cffi).
+AUTH_USER_MODEL = "identity.User"
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.Argon2PasswordHasher"]
+AUTH_PASSWORD_VALIDATORS = [
+    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator", "OPTIONS": {"min_length": 10}},
 ]
 
 # ADR-002 §1: migrations live in each module's infrastructure layer.
 MIGRATION_MODULES = {
     "shared": "cherrylove.shared.infrastructure.migrations",
     "audit": "cherrylove.audit.infrastructure.migrations",
+    "identity": "cherrylove.identity.infrastructure.migrations",
 }
 
 MIDDLEWARE = [
