@@ -35,5 +35,6 @@ class Migration(migrations.Migration):
         ("django_tasks_database", "0001_initial"),
         ("contenttypes", "0001_initial"),
         ("auth", "0001_initial"),
+        ("token_blacklist", "0001_initial"),
     ]
     operations = [migrations.RunSQL(GRANT, REVOKE)]

@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from config.settings import env
@@ -22,6 +23,9 @@ SECURE_REFERRER_POLICY = "no-referrer"
 
 # HMAC key for failed-login email fingerprints (ADR-008 §2): its own key, never SECRET_KEY or the KEK.
 AUDIT_HMAC_KEY = env.required("AUDIT_HMAC_KEY")
+
+# JWT signing key (ADR-004 §1): HS256 with its own key, never SECRET_KEY.
+JWT_SIGNING_KEY = env.required("JWT_SIGNING_KEY")
 
 # Key-encryption key, base64 of 32 bytes (ADR-009 §1): env or secret manager only, never in the database.
 KEK = env.required("KEK")
@@ -41,6 +45,7 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.auth",
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
     "django_tasks",
     "django_tasks_db",
@@ -156,4 +161,18 @@ TASKS = {
         "BACKEND": "django_tasks_db.DatabaseBackend",
         "QUEUES": ["default", "media"],
     }
+}
+
+# Sessions (ADR-004 §1-3): access 10 min, refresh 30 days rotating and blacklisted after use.
+SIMPLE_JWT = {
+    "ALGORITHM": "HS256",
+    "SIGNING_KEY": JWT_SIGNING_KEY,
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=10),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=30),
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
+    "UPDATE_LAST_LOGIN": False,
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "sub",
+    "AUTH_TOKEN_CLASSES": ("cherrylove.identity.infrastructure.adapters.jwt_tokens.MinimalAccessToken",),
 }
