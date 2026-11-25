@@ -110,9 +110,9 @@ def test_two_partners_onboard_sign_in_and_a_stolen_refresh_is_caught() -> None:
     assert _actions_for({couple_id}) == ["admin.couple_created"]
     assert _actions_for(invites).count("invite.accepted") == 2
     actions = _actions_for(users)
-    # Refreshed: the mobile rotation and the web cookie. Reused: the replay and the dead rotated copy after it.
+    # Refreshed: the mobile rotation and the web cookie. Reused: only the replay of the rotated token.
     assert (actions.count("auth.login"), actions.count("auth.refreshed"), actions.count("auth.refresh_reused")) == (
         2,
         2,
-        2,
+        1,
     )
