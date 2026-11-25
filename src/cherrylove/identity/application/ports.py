@@ -171,3 +171,15 @@ class RecoveryAccounts(Protocol):
 
 class RecoveryMailer(Protocol):
     def send(self, to: str, subject: str, body: str) -> None: ...
+
+
+class AccountStatus(Protocol):
+    def deactivate(self, user_id: UserId) -> bool | None:
+        """Disable the account: whether it was active before, or None when it does not exist."""
+        ...
+
+
+class ActorCache(Protocol):
+    def forget(self, user_id: UserId) -> None:
+        """Drop the cached Actor, so the next request resolves it from the database (ADR-005, F2.15)."""
+        ...

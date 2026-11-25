@@ -52,3 +52,6 @@ class CachedActorResolver(ActorResolver):
     def _membership_for(self, user_id: UserId) -> Membership:
         cached = self._cache.get_or_compute(actor_key(user_id), lambda: _load(user_id), ACTOR_TTL)
         return Membership(user_id, CoupleId(uuid.UUID(cached["couple_id"])), _locale(cached["locale"]))
+
+    def forget(self, user_id: UserId) -> None:
+        self._cache.delete(actor_key(user_id))
