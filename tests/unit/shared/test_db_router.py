@@ -10,7 +10,7 @@ import pytest
 from django.db.models.signals import post_migrate, pre_migrate
 
 from cherrylove.shared.infrastructure.orm import JobExecution
-from config.db_routers import MaintenanceMigrationsRouter
+from config.db_routers import MaintenanceMigrationsRouter, end_maintenance_migration, start_maintenance_migration
 
 ROUTER = MaintenanceMigrationsRouter()
 
@@ -23,18 +23,27 @@ def test_outside_migrations_the_app_connection_is_used() -> None:
 
 @pytest.mark.req("REQ-F-LOG-03")
 def test_during_maintenance_migrations_every_query_uses_maintenance() -> None:
-    pre_migrate.send(sender=None, app_config=None, using="maintenance")
+    start_maintenance_migration(using="maintenance")
     try:
         assert ROUTER.db_for_read(JobExecution) == "maintenance"
         assert ROUTER.db_for_write(JobExecution) == "maintenance"
     finally:
-        post_migrate.send(sender=None, app_config=None, using="maintenance")
+        end_maintenance_migration(using="maintenance")
     assert ROUTER.db_for_write(JobExecution) is None
 
 
 @pytest.mark.req("REQ-F-LOG-03")
+def test_the_receivers_are_connected_to_the_migrate_signals() -> None:
+    def uids(signal: object) -> set[object]:
+        return {key[0] for key, *_ in signal.receivers}  # type: ignore[attr-defined]
+
+    assert "cherrylove.start_maintenance_migration" in uids(pre_migrate)
+    assert "cherrylove.end_maintenance_migration" in uids(post_migrate)
+
+
+@pytest.mark.req("REQ-F-LOG-03")
 def test_signals_for_other_aliases_change_nothing() -> None:
-    pre_migrate.send(sender=None, app_config=None, using="default")
+    start_maintenance_migration(using="default")
     assert ROUTER.db_for_write(JobExecution) is None
 
 
